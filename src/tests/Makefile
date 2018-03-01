@@ -1,5 +1,5 @@
 # modify the paths appropriately
-JDKPATH = /usr/lib/jvm/java-8-oracle
+JDKPATH = $(JAVA_HOME)
 LIBPATH = .:..
 CLASSPATH = $(LIBPATH)
 BINPATH = $(JDKPATH)/bin
