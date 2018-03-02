@@ -26,3 +26,7 @@ src/javadoc
 
 # Generated TypeScript File
 src/typescript
+
+# Eclipse files
+src/.classpath
+src/.project
