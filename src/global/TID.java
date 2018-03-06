@@ -5,41 +5,34 @@ import java.io.IOException;
 /**
  * Tuple ID Class
  * 
- * @author shane
+ * @author Shane
  * 
  */
 public class TID {
-	private int numRIDs;
+	private final int numRIDs;
 	private int position;
-	private RID[] recordIDs;
+	private final RID[] recordIDs;
 
+	/**
+	 * Constructs this TID with the given size
+	 * 
+	 * @param numRIDs
+	 *            number of records
+	 */
 	public TID(int numRIDs) {
-		this.numRIDs = numRIDs;
-		this.position = 0;
-		this.recordIDs = new RID[numRIDs];
-	}
-
-	public TID(int numRIDs, int position) {
-		this.numRIDs = numRIDs;
-		this.position = position;
-		this.recordIDs = new RID[numRIDs];
+		this(numRIDs, 0);
 	}
 
 	/**
-	 * Constructs this TID from an array of RIDs
-	 * NOTE: RIDs are copied into a new internal array
-	 * @param numRIDs number of records
-	 * @param position starting position [0, numRIDs - 1]
-	 * @param recordIDs RIDs to copy
+	 * Constructs this TID with the given size and start position
+	 * 
+	 * @param numRIDs
+	 *            number of records
+	 * @param position
+	 *            starting position [0, numRIDs - 1]
 	 */
-	public TID(int numRIDs, int position, RID[] recordIDs) {
-		if (recordIDs == null)
-			throw new IllegalArgumentException("recordIDs cannot be null");
-		else if (numRIDs != recordIDs.length)
-			// TODO: verify this behavior is appropriate
-			throw new IllegalArgumentException(
-					"numRIDs must match recordIDs length");
-		else if (position < 0 || position >= numRIDs)
+	public TID(int numRIDs, int position) {
+		if (position < 0 || position >= numRIDs)
 			// TODO: verify this behavior is appropriate
 			throw new IllegalArgumentException(
 					"expected position in range [0, numRIDs - 1]");
@@ -47,6 +40,33 @@ public class TID {
 		this.numRIDs = numRIDs;
 		this.position = position;
 		this.recordIDs = new RID[numRIDs];
+
+		for (int i = 0; i < numRIDs; i++)
+			this.recordIDs[i] = new RID();
+	}
+
+	/**
+	 * Constructs this TID from an array of RIDs
+	 * 
+	 * NOTE: all incoming RIDs are copied to new RID objects
+	 * 
+	 * @param numRIDs
+	 *            number of records
+	 * @param position
+	 *            starting position [0, numRIDs - 1]
+	 * @param recordIDs
+	 *            RIDs to copy
+	 */
+	public TID(int numRIDs, int position, RID[] recordIDs) {
+		this(numRIDs, position);
+
+		if (recordIDs == null)
+			throw new IllegalArgumentException("recordIDs cannot be null");
+
+		if (numRIDs != recordIDs.length)
+			// TODO: verify this behavior is appropriate
+			throw new IllegalArgumentException(
+					"numRIDs must match recordIDs length");
 
 		for (int i = 0; i < numRIDs; i++)
 			this.recordIDs[i].copyRid(recordIDs[i]);
@@ -59,9 +79,13 @@ public class TID {
 	 *            the TID to copy into this TID
 	 */
 	public void copyTid(TID tid) {
-		numRIDs = tid.numRIDs;
+		if (numRIDs != tid.numRIDs)
+			throw new IllegalArgumentException(
+					"Cannot copy a TID of a different size");
+
 		position = tid.position;
-		recordIDs = tid.recordIDs;
+		for (int i = 0; i < numRIDs; i++)
+			recordIDs[i].copyRid(tid.recordIDs[i]);
 	}
 
 	/**
@@ -73,8 +97,16 @@ public class TID {
 	 */
 	public boolean equals(TID tid) {
 		// TODO: ensure the position field should be considered for this
-		return numRIDs == tid.numRIDs && position == tid.position
-				&& recordIDs == tid.recordIDs;
+		// start by checking basic fields
+		if (numRIDs == tid.numRIDs && position == tid.position) {
+			// check each RIDs individually
+			for (int i = 0; i < numRIDs; i++)
+				if (!recordIDs[i].equals(tid.recordIDs[i]))
+					return false; // there exists an RID doesn't match
+
+			return true; // all RIDs match
+		}
+		return false;
 	}
 
 	/**
@@ -102,7 +134,7 @@ public class TID {
 	 * 
 	 * @return numRIDs
 	 */
-	public int getnumRIDs() {
+	public int getNumRIDs() {
 		return numRIDs;
 	}
 
