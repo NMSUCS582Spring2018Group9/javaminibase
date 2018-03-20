@@ -70,6 +70,12 @@ SMJoin:SM_JoinTest.java
 sortmerge: SMJoin
 	$(JAVA) tests.SM_JoinTest
 
+# test TupleID
 
+TupleTest:TupleTest.java
+	$(JAVAC) TestDriver.java TupleTest.java
+
+tupletest: TupleTest
+	$(JAVA) tests.TupleTest
 
 

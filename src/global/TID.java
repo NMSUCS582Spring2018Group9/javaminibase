@@ -32,14 +32,9 @@ public class TID {
 	 *            starting position [0, numRIDs - 1]
 	 */
 	public TID(int numRIDs, int position) {
-		if (position < 0 || position >= numRIDs)
-			// TODO: verify this behavior is appropriate
-			throw new IllegalArgumentException(
-					"expected position in range [0, numRIDs - 1]");
-
 		this.numRIDs = numRIDs;
-		this.position = position;
 		this.recordIDs = new RID[numRIDs];
+		this.setPosition(position);
 
 		for (int i = 0; i < numRIDs; i++)
 			this.recordIDs[i] = new RID();
