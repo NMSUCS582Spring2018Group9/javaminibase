@@ -185,5 +185,17 @@ public class TID {
 		// make our own?
 		recordIDs[column].copyRid(recordID);
 	}
+	
+	/**
+	 * Get TID length. 
+	 * 
+	 * @param column
+	 * @param recordID
+	 */
+	public int getLength(){
+		// numRIDs (4 bytes) + position (4 bytes) + number of records * record length (8 bytes)
+		return 8 + recordIDs.length * 8;
+	}
+
 
 }
