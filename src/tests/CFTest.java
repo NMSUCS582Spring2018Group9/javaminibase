@@ -3,20 +3,13 @@ package tests;
 import java.io.*;
 import java.util.*;
 
-import com.sun.xml.internal.bind.v2.schemagen.xmlschema.AttributeType;
-
-import java.lang.*;
 //import heap.*;
-//import bufmgr.*;
-//import diskmgr.*;
+
 import global.*;
-import heap.Heapfile;
 import heap.InvalidTupleSizeException;
 import heap.InvalidTypeException;
 import heap.Tuple;
 import columnar.*;
-import diskmgr.*;
-//import chainexception.*;
 
 
 class CFDriver extends TestDriver implements GlobalConst
