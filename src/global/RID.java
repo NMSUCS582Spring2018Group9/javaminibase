@@ -52,6 +52,18 @@ public class RID{
       Convert.setIntValue ( pageNo.pid, offset+4, ary);
     }
   
+  /** Read rid info from ary offset
+   * @param ary the specified byte array
+   * @param offset the offset of byte array to read 
+   * @exception java.io.IOException I/O errors
+   */ 
+  public void readFromByteArray(byte [] ary, int offset)
+    throws java.io.IOException
+    {  
+      slotNo = Convert.getIntValue(offset, ary);
+      pageNo.pid = Convert.getIntValue(offset + 4, ary);
+    }
+  
   
   /** Compares two RID object, i.e, this to the rid
    * @param rid RID object to be compared to

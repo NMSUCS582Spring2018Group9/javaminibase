@@ -2,17 +2,11 @@ package columnar;
 
 import java.io.IOException;
 
-import diskmgr.Page;
 import global.*;
 import heap.*;
 
-//TODO(aalbaltan) to be replaced later
-// dummy classes
+// TODO(aalbaltan) to be replaced later
 class TupleScan{
-	
-}
-
-class Scan{
 	
 }
 
@@ -32,8 +26,8 @@ interface  Filetype {
 
 public class Columnarfile implements Filetype,  GlobalConst {
 	
-	// TODO(aalbaltan) phase 2 document defines numColumns as static int. This means all columnar
-	// files created are required to have the same number of columns which does not make a whole lot of sense. 
+	// Phase 2 document defines numColumns as static int. This means all columnar
+	// files created are required to have the same number of columns. 
 	
 	/* Number of columns/attributes of this relation */
 	static int _numColumns;
@@ -133,6 +127,19 @@ public class Columnarfile implements Filetype,  GlobalConst {
 	/**
 	 * Inserts a new tuple into the file
 	 * 
+	 * NOTE(aalbaltan): there wasn't much explanation on the format of tuplePtr. There are different ways to do
+	 * the format. My first thought was to use the Tuple class. However, the class was not documented properly 
+	 * and it took me a while to figure out proper usage. As a result, I decided to a format similar to the 
+	 * following example.
+	 * 
+	 * 	Example: Table header: int	String	float
+	 * 	Encoding Format: int (4 bytes) short (2 bytes) String (n bytes) + float (4 bytes)
+	 * 
+	 *   Basically, the size of a string is stored right before it.
+	 *   
+	 * Unfortunately, the decision to use this format has complicated matters. Due to time restrictions, it's too
+	 * now to fix the current format. Perhaps in phase 3 a better format could be used instead.
+	 * 
 	 * @param tuplePtr
 	 *            the tuple to be inserted
 	 *            
@@ -148,9 +155,6 @@ public class Columnarfile implements Filetype,  GlobalConst {
 	 * @throws InvalidTupleSizeException 
 	 * @throws InvalidSlotNumberException 
 	 */
-	// TODO(aalbaltan) project's phase 2 instructions state that this function must take a byte[] as an argument. However, I couldn't find
-	// a way to implement the function with the suggested argument type. I changed the argument type to Tuple. Change later if this is not
-	// OK.
 	public TID insertTuple(byte[] tuplePtr) throws
 	//public TID insertTuple(Tuple tuplePtr) throws
 		IllegalArgumentException, 
@@ -163,6 +167,7 @@ public class Columnarfile implements Filetype,  GlobalConst {
 		HFBufMgrException, 
 		HFDiskMgrException
 	{
+		// sanity checks
 		if(tuplePtr.length == 0)
 			throw new IllegalArgumentException("cannot insert empty tuple");
 		
@@ -191,13 +196,12 @@ public class Columnarfile implements Filetype,  GlobalConst {
 				}
 				pos += 2;
 				String str_val = Convert.getStrValue(pos, tuplePtr, str_len*2); // account of nulls?
-				pos += str_len;
+				pos += str_len*2;
 				data = new byte[str_val.length()*2 + 2];
 				Convert.setShortValue(str_len, 0, data);
 				Convert.setStrValue(str_val, 2, data);
 				break;
 				
-				//TODO(aalbaltan) implement
 			case AttrType.attrReal:
 				float float_val = Convert.getFloValue(pos, tuplePtr);
 				data = new byte[4];
@@ -215,8 +219,8 @@ public class Columnarfile implements Filetype,  GlobalConst {
 			recordsID[i] = _columnsFiles[i].insertRecord(data);
 		}
 		
-		// insert TID into header file
 		//TODO(aalbaltan) what does TID's position indicate exactly? and how to track it? 
+		// insert TID into header file
 		TID tupleId = new TID(_numColumns, 0, recordsID);
 		data = new byte[tupleId.getLength()];
 		tupleId.writeToByteArray(data, 0);
@@ -251,10 +255,15 @@ public class Columnarfile implements Filetype,  GlobalConst {
 		if(tid.getNumRIDs() != _numColumns)
 			throw new IllegalArgumentException("invalid tuple ID; number of columns mismatch");
 		
+		byte[] buff = new byte[1024];
+		// we leave space at the beginning of the tuple for header (check Tuple.setHdr method)
+		int pos = 4 + _numColumns * 2;
+		int numStrings = 0;
+		short[] stringSizes = new short[_numColumns];
+		
 		// check whether the tuple exists
 		for(int i = 0; i < _numColumns; ++i) {
-			Tuple t = new Tuple();
-			t = _columnsFiles[i].getRecord(tid.getRID(i));
+			Tuple t = _columnsFiles[i].getRecord(tid.getRID(i));
 			
 			if(t == null)
 				return null;
@@ -262,13 +271,27 @@ public class Columnarfile implements Filetype,  GlobalConst {
 			switch(_type[i].attrType)
 			{
 			case AttrType.attrInteger:
-				int int_val = t.getIntFld(1);
+				int int_val = Convert.getIntValue(0, t.getTupleByteArray());
+				Convert.setIntValue(int_val, pos, buff);
+				pos += 4;
 				break;
 			case AttrType.attrString:
-				String str = t.getStrFld(1);
+				short str_len = Convert.getShortValue(0, t.getTupleByteArray());
+				stringSizes[numStrings] = (short)(str_len*2);
+				++numStrings;
+				if(str_len <= 0) {
+					//TODO(aalbaltan) throw exception?
+				}
+				String str = Convert.getStrValue(2, t.getTupleByteArray(), str_len*2);
+				//Convert.setShortValue(str_len, pos, buff);
+				//pos += 2;
+				Convert.setStrValue(str, pos, buff);
+				pos += str_len * 2 + 2;
 				break;
 			case AttrType.attrReal:
-				float float_val = t.getFloFld(1);
+				float float_val = Convert.getFloValue(0, t.getTupleByteArray());
+				Convert.setFloValue(float_val, pos, buff);
+				pos += 4;
 				break;
 			//TODO(aalbaltan) handle other cases
 			default:
@@ -276,19 +299,37 @@ public class Columnarfile implements Filetype,  GlobalConst {
 			}
 		}
 		
-		return null;
+		short[] stringSizes2 = new short[numStrings];
+		System.arraycopy(stringSizes, 0, stringSizes2, 0, numStrings);
+		
+		byte[] buff2 = new byte[pos];
+		System.arraycopy(buff, 0, buff2, 0, buff2.length);
+		Tuple atuple = new Tuple(buff2, 0, buff2.length);
+		atuple.setHdr((short)_numColumns, _type, stringSizes2);
+		
+		return atuple;
 	}
 	
 	/**
 	 * Get tuples count in the file
 	 *            
 	 * @return number of tuples in this file
+	 * @throws IOException 
+	 * @throws HFBufMgrException 
+	 * @throws HFDiskMgrException 
+	 * @throws InvalidTupleSizeException 
+	 * @throws InvalidSlotNumberException 
 	 * 
 	 */
-	public int getTupleCnt()
+	public int getTupleCnt() throws 
+	InvalidSlotNumberException, 
+	InvalidTupleSizeException, 
+	HFDiskMgrException, 
+	HFBufMgrException, 
+	IOException
 	{
-		//TODO(aalbaltan) implement
-		return 0;
+		
+		return _headerFile.getRecCnt();
 	}
 	
 	/**
@@ -297,9 +338,15 @@ public class Columnarfile implements Filetype,  GlobalConst {
 	 * @return scanned tuples
 	 * 
 	 */
-	public TupleScan openTupleScan()
+	public TupleScan openTupleScan() throws 
+		InvalidTupleSizeException,
+		IOException
 	{
-		//TODO(aalbaltan) implement
+		//TODO(aalbaltan) implement 
+		/* 
+		TupleScan newscan = new TupleScan(this);
+		return newscan;
+		*/
 		return null;
 	}
 	
@@ -329,10 +376,63 @@ public class Columnarfile implements Filetype,  GlobalConst {
 	 * @return true if a tuple has been updated successfully, false otherwise
 	 * 
 	 */
-	boolean updateTuple(TID tid, Tuple newtuple)
+	public boolean updateTuple(TID tid, Tuple newTuple)
 	{
-		//TODO(aalbaltan) implement 
-		return false;
+		if (newTuple == null || tid == null)
+			throw new IllegalArgumentException("invalid argument");
+		
+		boolean bRecordFound = false;
+		RID old_rid = new RID();
+		
+		// look for TID in header file
+		try {
+			Scan s = _headerFile.openScan();
+			
+			// look through records in header file
+			for(Tuple t = s.getNext(old_rid); t != null; t = s.getNext(old_rid))
+			{
+				TID t_id = new TID(t.getTupleByteArray());
+				if(t_id.equals(tid))
+				{
+					bRecordFound = true;
+					break;
+				}
+			}
+			s.closescan();
+		} catch (Exception e) {
+			return false;
+		}
+		
+		if(!bRecordFound)
+			return false;
+		
+		// delete record from each column's file
+		for(int i = 0; i < _columnsFiles.length; ++i)
+		{
+			try {
+				_columnsFiles[i].deleteRecord(tid.getRID(i));
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		
+		try {
+			_headerFile.deleteRecord(old_rid);
+		}catch(Exception e) {
+			e.printStackTrace();
+		}
+		
+		boolean bRecordUpdated = false;
+		try {
+			byte[] tupleBytes = tupleToByteArray(newTuple, _type);
+			insertTuple(tupleBytes);
+			bRecordUpdated = true;
+		}catch(Exception e) {
+			e.printStackTrace();
+		}
+		
+		return bRecordUpdated;
 	}
 	
 	/**
@@ -348,10 +448,103 @@ public class Columnarfile implements Filetype,  GlobalConst {
 	 * @return true if a tuple has been updated successfully, false otherwise
 	 * 
 	 */
-	boolean updateColumnofTuple(TID tid, Tuple newtuple, int column)
+	public boolean updateColumnofTuple(TID tid, Tuple newTuple, int column)
 	{
-		//TODO(aalbaltan) implement
-		return false;
+		if(tid == null || newTuple == null)
+			throw new IllegalArgumentException("invalid tid/tuple");
+		
+		if(column < 0 || column >= _numColumns)
+			throw new IndexOutOfBoundsException();
+		
+		boolean bRecordFound = false;
+		RID old_rid = new RID();
+		
+		// look for TID in header file
+		try {
+			Scan s = _headerFile.openScan();
+			
+			// look through records in header file
+			for(Tuple t = s.getNext(old_rid); t != null; t = s.getNext(old_rid))
+			{
+				TID t_id = new TID(t.getTupleByteArray());
+				if(t_id.equals(tid))
+				{
+					bRecordFound = true;
+					break;
+				}
+			}
+			s.closescan();
+		} catch (Exception e) {
+			return false;
+		}
+		
+		if(!bRecordFound) // tuple does not exist
+			return false;
+		
+		RID columnRID = null;
+		boolean bRecordUpdated = false;
+		AttrType[] columnType = new AttrType[1];
+		columnType[0] = _type[column];
+		// delete the record from the specified column
+		try {
+			_columnsFiles[column].deleteRecord(tid.getRID(column));
+			columnRID = _columnsFiles[column].insertRecord(tupleToByteArray(newTuple, columnType));
+			_headerFile.deleteRecord(old_rid);
+			
+			TID newTID = tid;
+			newTID.setRID(column, columnRID);			
+			byte[] data = new byte[newTID.getLength()];
+			newTID.writeToByteArray(data, 0);
+			_headerFile.insertRecord(data);
+			
+			bRecordUpdated = true;
+			
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		return bRecordUpdated;
+	}
+	
+	/* Auxiliary function to convert a tuple into expected byte format */
+	private byte[] tupleToByteArray(Tuple t, AttrType[] type) throws 
+	FieldNumberOutOfBoundException, 
+	IOException
+	{
+		byte[] buff = new byte[1024];
+		int pos = 0;
+		for(int i = 0; i < type.length; ++i)
+		{
+			switch(type[i].attrType)
+			{
+			case AttrType.attrInteger:
+				int int_val = t.getIntFld(i+1);
+				Convert.setIntValue(int_val, pos, buff);
+				pos += 4;
+				break;
+			case AttrType.attrString:
+				String str = t.getStrFld(i+1);
+				short str_len = (short)str.length();
+				Convert.setShortValue(str_len, pos, buff);
+				pos += 2;
+				Convert.setStrValue(str, pos, buff);
+				pos += str_len * 2;
+				break;
+			case AttrType.attrReal:
+				float float_val = t.getFloFld(i+1);
+				Convert.setFloValue(float_val, pos, buff);
+				pos += 4;
+				break;
+			default:
+				//TODO(aalbaltan) throw exception?
+				break;
+			}
+		}
+		
+		byte[] ret_array = new byte[pos];
+		System.arraycopy(buff, 0, ret_array, 0, pos);
+		return ret_array;
 	}
 	
 }
