@@ -2,9 +2,6 @@ package tests;
 
 import java.io.*;
 import java.util.*;
-
-import com.sun.xml.internal.bind.v2.schemagen.xmlschema.AttributeType;
-
 import java.lang.*;
 //import heap.*;
 //import bufmgr.*;
