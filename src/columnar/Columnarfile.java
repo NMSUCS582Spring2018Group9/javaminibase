@@ -5,11 +5,6 @@ import java.io.IOException;
 import global.*;
 import heap.*;
 
-// TODO(aalbaltan) to be replaced later
-class TupleScan{
-	
-}
-
 interface  Filetype {
 	  int TEMP = 0;
 	  int ORDINARY = 1;
@@ -342,12 +337,8 @@ public class Columnarfile implements Filetype,  GlobalConst {
 		InvalidTupleSizeException,
 		IOException
 	{
-		//TODO(aalbaltan) implement 
-		/* 
 		TupleScan newscan = new TupleScan(this);
 		return newscan;
-		*/
-		return null;
 	}
 	
 	/**

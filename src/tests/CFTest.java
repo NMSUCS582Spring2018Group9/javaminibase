@@ -413,6 +413,124 @@ public boolean runTests () {
 		return status;
 	}
 
+
+
+protected boolean test4()
+{		
+	System.out.println ("\n  Test 4: TupleScan getNext and position\n");
+	boolean status = OK;
+	
+	// create database with 100 pages and 100 buffers
+	SystemDefs sysdef = new SystemDefs(dbpath,100,100,"Clock");
+			
+	String fileName = "columnar_file_1"; 
+	
+	AttrType[] attributes = new AttrType[4];
+	attributes[0] = new AttrType(AttrType.attrInteger);
+	attributes[1] = new AttrType(AttrType.attrString);
+	attributes[2] = new AttrType(AttrType.attrString);
+	attributes[3] = new AttrType(AttrType.attrReal);
+	
+	Columnarfile f = null;
+	//SystemDefs.JavabaseDB.printEntries();
+	try {
+		f = new Columnarfile(fileName, attributes.length, attributes);
+		
+		int id = 100;
+		String name = "name";
+		String major = "major";
+		float credit = 30;
+		
+		int numRecords = 50;
+		TID[] tupleIDs = new TID[numRecords]; 
+		LinkedList<byte[]> records = new LinkedList<>();
+		LinkedList<Tuple> tuples = new LinkedList<>();
+		
+		// create and insert numRecords records
+		for(int i = 0; i < numRecords; ++i)
+		{
+			records.add(createRecord(id++, name+i, major+i, credit++));
+			tupleIDs[i] = f.insertTuple(records.get(i));
+		}
+		
+		// update the value of some records
+		AttrType[] type2 = new AttrType[1];
+		type2[0] = new AttrType(AttrType.attrString);
+		String updateName = "Abdu";
+		byte[] data4 = new byte[2 + updateName.length()*2];
+		Convert.setShortValue((short) updateName.length(), 0, data4);
+		Convert.setStrValue(updateName, 2, data4);
+		Tuple t5 = createTuple(data4, type2);			
+		f.updateColumnofTuple(tupleIDs[numRecords/2], t5, 1);
+		
+		// retrieve records using TupleScan object
+		System.out.println("Reading tuples using TupleScan");
+		TupleScan scanner =  f.openTupleScan();
+		Tuple t;
+		TID tid = new TID(attributes.length);
+		for(t = scanner.getNext(tid); 
+				t != null; 
+				t = scanner.getNext(tid))
+		{
+			tuples.add(t);
+			System.out.printf("%d, %s, %s, %.2f\n", 
+					t.getIntFld(1), 
+					t.getStrFld(2), 
+					t.getStrFld(3), 
+					t.getFloFld(4));
+		}
+		scanner.closetuplescan();
+		
+		
+		System.out.println("\nTupleScan.position tests\n");
+		// test TupleScan.position 1
+		System.out.println("calling: scanner.position(tupleIDs[45])");
+		status = scanner.position(tupleIDs[45]);
+		if(status)
+		{
+			for(int i = 0; i < 3; ++i) // print 3 records
+			{
+				t = scanner.getNext(tid);
+				System.out.printf("%d, %s, %s, %.2f\n", 
+						t.getIntFld(1), 
+						t.getStrFld(2), 
+						t.getStrFld(3), 
+						t.getFloFld(4));
+			}
+		}
+		
+		
+		// test TupleScan.position 1
+		System.out.println("\ncalling: scanner.position(tupleIDs[0])");
+		status = scanner.position(tupleIDs[0]);
+		if(status)
+		{
+			for(int i = 0; i < 3; ++i) // print 3 records
+			{
+				t = scanner.getNext(tid);
+				System.out.printf("%d, %s, %s, %.2f\n", 
+						t.getIntFld(1), 
+						t.getStrFld(2), 
+						t.getStrFld(3), 
+						t.getFloFld(4));
+			}
+		}
+		
+		
+	}catch(Exception e) {
+		status = FAIL;
+		System.out.println("test failed: " + e.getMessage());
+	}
+	
+	try {
+		SystemDefs.JavabaseBM.flushAllPages();
+		SystemDefs.JavabaseDB.closeDB();
+	}catch(Exception e) {/*empty*/}
+	
+	
+	return status;
+}
+
 }
 
 public class CFTest {
