@@ -78,5 +78,12 @@ CFTest:CFTest.java
 cftest: CFTest
 	$(JAVA) tests.CFTest
 
+# test TupleID
+
+TupleTest:TupleTest.java
+	$(JAVAC) TestDriver.java TupleTest.java
+
+tupletest: TupleTest
+	$(JAVA) tests.TupleTest
 
 
