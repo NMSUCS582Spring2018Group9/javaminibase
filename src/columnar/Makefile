@@ -9,8 +9,8 @@ PROGS = together
 
 all: $(PROGS)
 
-bm:BufMgr.java
-	$(JAVAC) BufMgr.java
+cf:Columnarfile.java
+	$(JAVAC) Columnarfile.java
 
 together:*.java
 	$(JAVAC) *.java

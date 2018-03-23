@@ -1,6 +1,8 @@
 package global;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 
 /**
  * Tuple ID Class
@@ -9,9 +11,10 @@ import java.io.IOException;
  * 
  */
 public class TID {
-	private final int numRIDs;
+	// Method readFromByteArray needs to change these class members. Hence, they cannot be final
+	private int numRIDs; 
 	private int position;
-	private final RID[] recordIDs;
+	private RID[] recordIDs;
 
 	/**
 	 * Constructs this TID with the given size
@@ -66,6 +69,19 @@ public class TID {
 		for (int i = 0; i < numRIDs; i++)
 			this.recordIDs[i].copyRid(recordIDs[i]);
 	}
+	
+	/**
+	 * Constructs this TID from a byte array
+	 * 
+	 * @param array
+	 *            byte array
+	 * @throws IOException 
+	 * @throws ClassNotFoundException 
+	 */
+	public TID(byte[] array) throws IOException, ClassNotFoundException {
+		readFromByteArray(array, 0);
+	}
+	
 
 	/**
 	 * Copies the data of the given TID into this TID
@@ -180,5 +196,43 @@ public class TID {
 		// make our own?
 		recordIDs[column].copyRid(recordID);
 	}
+	
+	/**
+	 * Get TID length. 
+	 * 
+	 * @param column
+	 * @param recordID
+	 */
+	public int getLength(){
+		// numRIDs (4 bytes) + position (4 bytes) + number of records * record length (8 bytes)
+		return 8 + recordIDs.length * 8;
+	}
+	
+	/**
+	 * Read TID information from byte array
+	 * 
+	 * @param array
+	 *            the specified byte array
+	 * @param offset
+	 *            the offset of byte array to read
+	 * @exception java.io.IOException
+	 *                I/O errors
+	 * @throws ClassNotFoundException 
+	 */
+	public void readFromByteArray(byte[] array, int offset) throws IOException, ClassNotFoundException {
+		// base data, 2 integers, 8 bytes total
+		numRIDs = Convert.getIntValue(offset, array);
+		position = Convert.getIntValue(offset + 4, array);
+
+		// record ID data, 8 bytes per record
+		recordIDs = new RID[numRIDs];
+		int pos = offset + 8;
+		for(int i = 0; i < numRIDs; ++i)
+		{
+			recordIDs[i] = new RID();
+			recordIDs[i].readFromByteArray(array, pos + i * 8);
+		}
+	}
+
 
 }

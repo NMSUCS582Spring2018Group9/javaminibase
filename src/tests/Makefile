@@ -3,7 +3,7 @@ JDKPATH = $(JAVA_HOME)
 LIBPATH = .:..
 CLASSPATH = $(LIBPATH)
 BINPATH = $(JDKPATH)/bin
-JAVAC = $(JDKPATH)/bin/javac -classpath $(CLASSPATH)
+JAVAC = $(JDKPATH)/bin/javac -g -classpath $(CLASSPATH)
 JAVA  = $(JDKPATH)/bin/java  -classpath $(CLASSPATH)
 
 # test buffer manager
@@ -69,6 +69,14 @@ SMJoin:SM_JoinTest.java
 
 sortmerge: SMJoin
 	$(JAVA) tests.SM_JoinTest
+
+# test columnarfile 
+
+CFTest:CFTest.java
+	$(JAVAC) TestDriver.java CFTest.java
+
+cftest: CFTest
+	$(JAVA) tests.CFTest
 
 # test TupleID
 

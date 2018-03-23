@@ -6,22 +6,18 @@ import java.io.*;
 import bufmgr.*;
 import global.*;
 
-public class DB implements GlobalConst {
+/**
+ * ColumnDB Class
+ *   
+ * 
+ * @author aalbaltan
+ * 
+ */
+
+public class ColumnDB implements GlobalConst {
 
   
   private static final int bits_per_page = MAX_SPACE * 8;
-  
-  // Issue#1: adding page counter to disk manager.
-  
-  /* total number of pages read */ 
-  private static int num_pages_read = 0;
-  
-  /* total number of pages written */
-  private static int num_pages_written = 0;
-  
-  /* page counter access methods */
-  public static int GetNumberOfPageReads() { return num_pages_read;}
-  public static int GetNumberOfPageWrites() { return num_pages_written;}
   
   
   /** Open the database with the given name.
@@ -62,7 +58,7 @@ public class DB implements GlobalConst {
   
   /** default constructor.
    */
-  public DB() { }
+  public ColumnDB() { }
   
   
   /** DB Constructors.
@@ -161,9 +157,6 @@ public class DB implements GlobalConst {
     byte [] buffer = apage.getpage();  //new byte[MINIBASE_PAGESIZE];
     try{
       fp.read(buffer);
-      
-      // register page read from disk
-      ++num_pages_read;
     }
     catch (IOException e) {
       throw new FileIOException(e, "DB file I/O error");
@@ -194,9 +187,6 @@ public class DB implements GlobalConst {
     // Write the appropriate number of bytes.
     try{
       fp.write(apage.getpage());
-      
-      // register page write to disk
-      ++num_pages_written;
     }
     catch (IOException e) {
       throw new FileIOException(e, "DB file I/O error");
@@ -737,33 +727,6 @@ public class DB implements GlobalConst {
       
     }
   
-  /**
-   * Auxiliary function to print DBFirstPage entries
-   * 
-   */
-  public void printEntries()
-  {
-	    PageId pageId = new PageId();
-	    Page apage = new Page();
-	    pageId.pid = 0;
-	    
-	    try {
-		    pinPage(pageId, apage, false /*read disk*/);
-		    
-		    DBFirstPage firstpg = new DBFirstPage();
-		    firstpg.openPage(apage);
-		    System.out.println("DB entries: " + firstpg.getNumOfEntries());
-		    for(int i = 0; i < firstpg.getNumOfEntries(); ++i)
-		    {
-		    	System.out.println(firstpg.getFileEntry(pageId, i));
-		    }
-		    //unpinPage(pageId, false /* undirty*/);
-	    }
-	    catch(Exception e) {
-	    	System.out.println(e.getMessage());
-	    }
-  }
-  
   private RandomAccessFile fp;
   private int num_pages;
   private String name;
@@ -884,231 +847,6 @@ public class DB implements GlobalConst {
 
   } // end of unpinPage
   
-}//end of DB class
+  
+}//end of ColumnDB class
 
-/**
- * interface of PageUsedBytes
- */
-interface PageUsedBytes
-{
-  int DIR_PAGE_USED_BYTES = 8 + 8;
-  int FIRST_PAGE_USED_BYTES = DIR_PAGE_USED_BYTES + 4;
-}
-
-/** Super class of the directory page and first page
- */
-class DBHeaderPage implements PageUsedBytes, GlobalConst { 
-
-  protected static final int NEXT_PAGE = 0;
-  protected static final int NUM_OF_ENTRIES = 4;
-  protected static final int START_FILE_ENTRIES = 8;
-  protected static final int SIZE_OF_FILE_ENTRY = 4 + MAX_NAME + 2;
-  
-  protected byte [] data;
-  
-  /**
-   * Default constructor
-   */
-  public DBHeaderPage ()
-    {  }
-  
-  /**
-   * Constrctor of class DBHeaderPage
-   * @param page a page of Page object
-   * @param pageusedbytes number of bytes used on the page
-   * @exception IOException
-   */   
-  public DBHeaderPage(Page page, int pageusedbytes)
-    throws IOException
-    {
-      data = page.getpage();
-      PageId pageno = new PageId();
-      pageno.pid = INVALID_PAGE;
-      setNextPage(pageno);
-      
-      PageId temppid = getNextPage();
-      
-      int num_entries  = (MAX_SPACE - pageusedbytes) /SIZE_OF_FILE_ENTRY; 
-      setNumOfEntries(num_entries);
-      
-      for ( int index=0; index < num_entries; ++index )
-        initFileEntry(INVALID_PAGE,  index);
-    }
-  
-  /**
-   * set the next page number
-   * @param pageno next page ID 
-   * @exception IOException I/O errors
-   */
-  public void setNextPage(PageId pageno)
-    throws IOException
-    {
-      Convert.setIntValue(pageno.pid, NEXT_PAGE, data);
-    }
-  
-  /**
-   * return the next page number
-   * @return next page ID
-   * @exception IOException I/O errors
-   */
-  public PageId getNextPage()
-    throws IOException
-    {
-      PageId nextPage = new PageId();
-      nextPage.pid= Convert.getIntValue(NEXT_PAGE, data);
-      return nextPage;
-    }
-  
-  /**
-   * set number of entries on this page
-   * @param numEntries the number of entries
-   * @exception IOException I/O errors
-   */
-  
-  protected void setNumOfEntries(int numEntries) 
-    throws IOException	
-    { 
-      Convert.setIntValue (numEntries, NUM_OF_ENTRIES, data);
-    }
-  
-  /**
-   * return the number of file entries on the page
-   * @return number of entries
-   * @exception IOException I/O errors
-   */  
-  public int getNumOfEntries()
-    throws IOException
-    {
-      return Convert.getIntValue(NUM_OF_ENTRIES, data);
-    }
-  
-  /**
-   * initialize file entries as empty
-   * @param empty invalid page number (=-1)
-   * @param entryno file entry number
-   * @exception IOException I/O errors
-   */
-  private void initFileEntry(int empty, int entryNo)
-    throws IOException {
-    int position = START_FILE_ENTRIES + entryNo * SIZE_OF_FILE_ENTRY;
-    Convert.setIntValue (empty, position, data);
-  } 
-  
-  /**
-   * set file entry
-   * @param pageno page ID
-   * @param fname the file name
-   * @param entryno file entry number
-   * @exception IOException I/O errors
-   */  
-  public  void setFileEntry(PageId pageNo, String fname, int entryNo)
-    throws IOException {
-
-    int position = START_FILE_ENTRIES + entryNo * SIZE_OF_FILE_ENTRY;
-    Convert.setIntValue (pageNo.pid, position, data);
-    Convert.setStrValue (fname, position +4, data);	
-  }
-  
-  /**
-   * return file entry info
-   * @param pageno page Id
-   * @param entryNo the file entry number
-   * @return file name
-   * @exception IOException I/O errors
-   */  
-  public String getFileEntry(PageId pageNo, int entryNo)
-    throws IOException {
-
-    int position = START_FILE_ENTRIES + entryNo * SIZE_OF_FILE_ENTRY;
-    pageNo.pid = Convert.getIntValue (position, data);
-    return (Convert.getStrValue (position+4, data, MAX_NAME + 2));
-  }
-  
-}
-
-/**
- * DBFirstPage class which is a subclass of DBHeaderPage class
- */
-class DBFirstPage extends DBHeaderPage {
-
-  protected static final int NUM_DB_PAGE = MINIBASE_PAGESIZE -4;
-  
-  /**
-   * Default construtor 
-   */
-  public DBFirstPage()  { super();}
-  
-  /**
-   * Constructor of class DBFirstPage class
-   * @param page a page of Page object
-   * @exception IOException I/O errors
-   */
-  public DBFirstPage(Page page)
-    throws IOException	
-    {
-      super(page, FIRST_PAGE_USED_BYTES);
-    }
-  
-  /** open an exist DB first page
-   * @param page a page of Page object
-   */
-  public void openPage(Page page)
-    {
-      data = page.getpage();
-    }
-  
-  
-  /**
-   * set number of pages in the DB
-   * @param num the number of pages in DB
-   * @exception IOException I/O errors
-   */
-  public void setNumDBPages(int num)
-    throws IOException	
-    {
-      Convert.setIntValue (num, NUM_DB_PAGE, data);
-    }
-  
-  /**
-   * return the number of pages in the DB
-   * @return number of pages in DB
-   * @exception IOException I/O errors
-   */
-  public int getNumDBPages()
-    throws IOException {
-
-    return (Convert.getIntValue(NUM_DB_PAGE, data));
-  }
-  
-}
-
-/**
- * DBDirectoryPage class which is a subclass of DBHeaderPage class
- */
-class DBDirectoryPage extends DBHeaderPage  { //implements PageUsedBytes
-
-  /**
-   * Default constructor
-   */
-  public DBDirectoryPage ()  { super(); }
-  
-  /**
-   * Constructor of DBDirectoryPage class
-   * @param page a page of Page object
-   * @exception IOException
-   */
-  public DBDirectoryPage(Page page)
-    throws IOException
-    {
-      super(page, DIR_PAGE_USED_BYTES);
-    }
-  
-  /** open an exist DB directory page
-   * @param page a page of Page object
-   */
-  public void openPage(Page page)
-    {
-      data = page.getpage();
-    }
-  
-}

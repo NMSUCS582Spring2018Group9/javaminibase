@@ -2,7 +2,7 @@ JDKPATH = $(JAVA_HOME)
 LIBPATH = ../../construction
 CLASSPATH = $(JDKPATH)/lib/classes.zip:.:..:$(LIBPATH)
 BINPATH = $(JDKPATH)/bin
-JAVAC = $(JDKPATH)/bin/javac -classpath $(CLASSPATH)
+JAVAC = $(JDKPATH)/bin/javac -g -classpath $(CLASSPATH)
 JAVA  = $(JDKPATH)/bin/java  -classpath $(CLASSPATH)
 
 PROGS = together

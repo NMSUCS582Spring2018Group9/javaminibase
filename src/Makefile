@@ -4,7 +4,7 @@
 #the assignment to be generated
 
 JARFILES=bufmgr/*.class diskmgr/*.class global/*.class iterator/*.class\
-         heap/*.class chainexception/*.class  btree/*.class index/*.class tests/*.class
+         heap/*.class chainexception/*.class  btree/*.class index/*.class columnar/*.class tests/*.class
 
 JDKPATH = $(JAVA_HOME)
 LIBPATH = .:..
@@ -13,7 +13,7 @@ BINPATH = $(JDKPATH)/bin
 JAVAC = $(JDKPATH)/bin/javac -classpath $(CLASSPATH)
 JAVA  = $(JDKPATH)/bin/java  -classpath $(CLASSPATH)
 
-DOCFILES=bufmgr diskmgr global chainexception heap btree iterator index
+DOCFILES=bufmgr diskmgr global chainexception heap btree iterator index columnar
 
 ##############  update the above for each assignment in making
 
@@ -37,12 +37,17 @@ db:
 	make -C heap
 	make -C index
 	make -C iterator
+	make -C columnar
 	
 doc:
 	$(JAVADOC) $(DOCFILES)
 
 test: 
-	cd tests; make bmtest dbtest; whoami; make hftest bttest indextest jointest sorttest sortmerge
+	cd tests; make bmtest dbtest; whoami; make hftest bttest indextest jointest sorttest sortmerge cftest
+	
+# test columnar package only
+columnar_test:
+	cd tests; make cftest
 
 clean:
 	\rm -f $(CLASSPATH)/*.class *~ \#* core $(JARFILES) TRACE
