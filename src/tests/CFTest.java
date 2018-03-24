@@ -105,57 +105,6 @@ public boolean runTests () {
 		
 		return data;
 	}
-	
-	Tuple createTuple(byte[] array, AttrType[] types) throws IOException, InvalidTypeException, InvalidTupleSizeException 
-	{
-		short []strings_sizes = new short[types.length];
-		byte[] buff = new byte[1024];
-		int read_pos = 0;
-		int pos = 4 + types.length * 2;
-		int numStrings = 0;
-		
-		for(int i = 0; i < types.length; ++i)
-		{
-			switch(types[i].attrType)
-			{
-			case AttrType.attrInteger:
-				int int_val = Convert.getIntValue(read_pos, array);
-				read_pos += 4;
-				Convert.setIntValue(int_val, pos, buff);
-				pos += 4;
-				break;
-			case AttrType.attrString:
-				short str_len = Convert.getShortValue(read_pos, array);
-				read_pos += 2;
-				strings_sizes[numStrings] = (short)(str_len*2);
-				++numStrings;
-				String str = Convert.getStrValue(read_pos, array, str_len*2);
-				Convert.setStrValue(str, pos, buff);
-				pos += str_len * 2 + 2;
-				read_pos += str_len * 2;				
-				break;
-			case AttrType.attrReal:
-				float float_val = Convert.getFloValue(read_pos, array);
-				read_pos += 4;
-				Convert.setFloValue(float_val, pos, buff);
-				pos += 4;
-				break;
-			//TODO(aalbaltan) handle other cases
-			default:
-				break;
-			}
-		}
-		
-		short[] stringSizes2 = new short[numStrings];
-		System.arraycopy(strings_sizes, 0, stringSizes2, 0, numStrings);
-		
-		byte[] buff2 = new byte[pos];
-		System.arraycopy(buff, 0, buff2, 0, buff2.length);
-		Tuple atuple = new Tuple(buff2, 0, buff2.length);
-		atuple.setHdr((short)types.length, types, stringSizes2);
-		
-		return atuple;
-	}
 
 	protected boolean test1()
 	{		
@@ -172,10 +121,14 @@ public boolean runTests () {
 		attributes[1] = new AttrType(AttrType.attrString);
 		attributes[2] = new AttrType(AttrType.attrString);
 		
+		short[] stringsSizes = new short[2];
+		stringsSizes[0] = 40;
+		stringsSizes[1] = 40;
+		
 		Columnarfile f = null;
 		//SystemDefs.JavabaseDB.printEntries();
 		try {
-			f = new Columnarfile(fileName, attributes.length, attributes);
+			f = new Columnarfile(fileName, attributes.length, attributes, stringsSizes);
 		}catch(Exception e) {
 			status = false;
 			System.out.println("error: " + e.getMessage());
@@ -237,10 +190,14 @@ public boolean runTests () {
 		attributes[2] = new AttrType(AttrType.attrString);
 		attributes[3] = new AttrType(AttrType.attrReal);
 		
+		short[] stringsSizes = new short[2];
+		stringsSizes[0] = 40;
+		stringsSizes[1] = 40;
+		
 		Columnarfile f = null;
 		//SystemDefs.JavabaseDB.printEntries();
 		try {
-			f = new Columnarfile(fileName, attributes.length, attributes);
+			f = new Columnarfile(fileName, attributes.length, attributes, stringsSizes);
 			
 			if(f.getTupleCnt()!= 0)
 				throw new Exception("file's tuples count: expected: 0, actual: " + f.getTupleCnt());
@@ -250,10 +207,14 @@ public boolean runTests () {
 			String major = "CS Unfortunately";
 			float credit = 39;
 			
-			byte[] data = createRecord(id, name, major, credit);
+			Tuple t1 = new Tuple();
+			t1.setHdr((short)4, attributes, stringsSizes);
+			t1.setIntFld(1, id);
+			t1.setStrFld(2, name);
+			t1.setStrFld(3, major);
+			t1.setFloFld(4, credit);
 			
-			
-			TID tid = f.insertTuple(data);
+			TID tid = f.insertTuple(t1.getTupleByteArray());
 			
 			if(f.getTupleCnt()!= 1)
 				throw new Exception("file's tuples count: expected: 1, actual: " + f.getTupleCnt());
@@ -264,25 +225,30 @@ public boolean runTests () {
 			String major2 = "Engineering";
 			float credit2 = 14;
 			
-			byte[] data2 = createRecord(id2, name2, major2, credit2);
+			Tuple t2 = new Tuple();
+			t2.setHdr((short)4, attributes, stringsSizes);
+			t2.setIntFld(1, id2);
+			t2.setStrFld(2, name2);
+			t2.setStrFld(3, major2);
+			t2.setFloFld(4, credit2);
 			
-			TID tid2 = f.insertTuple(data2);
+			TID tid2 = f.insertTuple(t2.getTupleByteArray());
 			
 			if(f.getTupleCnt()!= 2)
 				throw new Exception("file's tuples count: expected: 2, actual: " + f.getTupleCnt());
 			
 			// read the inserted tuple back
-			Tuple t = f.getTuple(tid);
-			if(t.getIntFld(1) != id)
+			t1 = f.getTuple(tid);
+			if(t1.getIntFld(1) != id)
 				status = false;
-			if(!t.getStrFld(2).equals(name))
+			if(!t1.getStrFld(2).equals(name))
 				status = false;
-			if(!t.getStrFld(3).equals(major))
+			if(!t1.getStrFld(3).equals(major))
 				status = false;
-			if(Float.compare(t.getFloFld(4), credit) != 0)
+			if(Float.compare(t1.getFloFld(4), credit) != 0)
 				status = false;
 			
-			Tuple t2 = f.getTuple(tid2);
+			t2 = f.getTuple(tid2);
 			if(t2.getIntFld(1) != id2)
 				status = false;
 			if(!t2.getStrFld(2).equals(name2))
@@ -293,7 +259,7 @@ public boolean runTests () {
 				status = false;
 			
 			TID fakeTID = new TID(4);
-			if(f.updateTuple(fakeTID, t))
+			if(f.updateTuple(fakeTID, t1))
 				status = false;
 			
 			
@@ -301,9 +267,13 @@ public boolean runTests () {
 			name = "Abdu";
 			major = "CS";
 			credit = 40;
+
+			t1.setIntFld(1, id);
+			t1.setStrFld(2, name);
+			t1.setStrFld(3, major);
+			t1.setFloFld(4, credit);
 			
-			byte[] data3 = createRecord(id, name, major, credit);
-			f.updateTuple(tid, createTuple(data3, attributes));
+			f.updateTuple(tid, t1);
 			
 			Tuple t3 = f.getTuple(tid);
 			Tuple t4 = f.getTuple(tid2);
@@ -313,17 +283,18 @@ public boolean runTests () {
 			if(f.getTupleCnt() != 2)
 				status = false;
 			
-			// update a single column
+			// update a single column (major column)
 			AttrType[] type2 = new AttrType[1];
+			short[] sSizes = new short[1];
+			sSizes[0] = 40;
 			type2[0] = new AttrType(AttrType.attrString);
 			String updateMajor = "Biology";
-			byte[] data4 = new byte[2 + updateMajor.length()*2];
-			Convert.setShortValue((short) updateMajor.length(), 0, data4);
-			Convert.setStrValue(updateMajor, 2, data4);
-			Tuple t5 = createTuple(data4, type2);
-			f.updateColumnofTuple(tid, t5, 2);
-			t = f.getTuple(tid);
-			System.out.printf("%d, %s, %s, %.2f\n", t.getIntFld(1), t.getStrFld(2), t.getStrFld(3), t.getFloFld(4));
+			Tuple updateTuple = new Tuple();
+			updateTuple.setHdr((short)type2.length, type2, sSizes);
+			updateTuple.setStrFld(1, updateMajor);
+			f.updateColumnofTuple(tid, updateTuple, 2);
+			Tuple t5 = f.getTuple(tid);
+			System.out.printf("%d, %s, %s, %.2f\n", t5.getIntFld(1), t5.getStrFld(2), t5.getStrFld(3), t5.getFloFld(4));
 			
 		}catch(Exception e) {
 			status = false;
@@ -356,10 +327,14 @@ public boolean runTests () {
 		attributes[2] = new AttrType(AttrType.attrString);
 		attributes[3] = new AttrType(AttrType.attrReal);
 		
+		short[] stringsSizes = new short[2];
+		stringsSizes[0] = 40;
+		stringsSizes[1] = 40;
+		
 		Columnarfile f = null;
 		//SystemDefs.JavabaseDB.printEntries();
 		try {
-			f = new Columnarfile(fileName, attributes.length, attributes);
+			f = new Columnarfile(fileName, attributes.length, attributes, stringsSizes);
 			
 			int id = 100;
 			String name = "name";
@@ -368,25 +343,33 @@ public boolean runTests () {
 			
 			int numRecords = 50;
 			TID[] tupleIDs = new TID[numRecords]; 
-			LinkedList<byte[]> records = new LinkedList<>();
+			//LinkedList<byte[]> records = new LinkedList<>();
 			LinkedList<Tuple> tuples = new LinkedList<>();
 			
 			// create and insert numRecords records
 			for(int i = 0; i < numRecords; ++i)
 			{
-				records.add(createRecord(id++, name+i, major+i, credit++));
-				tupleIDs[i] = f.insertTuple(records.get(i));
+				//records.add(createRecord(id++, name+i, major+i, credit++));
+				Tuple t = new Tuple();
+				t.setHdr((short)attributes.length, attributes, stringsSizes);
+				t.setIntFld(1, id++);
+				t.setStrFld(2, name+i);
+				t.setStrFld(3, major+i);
+				t.setFloFld(4, credit++);
+				
+				tupleIDs[i] = f.insertTuple(t.getTupleByteArray());
 			}
 			
 			// update the value of some records
 			AttrType[] type2 = new AttrType[1];
+			short[] sSizes = new short[1];
+			sSizes[0] = 40;
 			type2[0] = new AttrType(AttrType.attrString);
 			String updateName = "Abdu";
-			byte[] data4 = new byte[2 + updateName.length()*2];
-			Convert.setShortValue((short) updateName.length(), 0, data4);
-			Convert.setStrValue(updateName, 2, data4);
-			Tuple t5 = createTuple(data4, type2);			
-			f.updateColumnofTuple(tupleIDs[numRecords/2], t5, 1);
+			Tuple updateTuple = new Tuple();
+			updateTuple.setHdr((short)type2.length, type2, sSizes);
+			updateTuple.setStrFld(1, updateName);			
+			f.updateColumnofTuple(tupleIDs[numRecords/2], updateTuple, 1);
 			
 			// print all records
 			for(int i = 0; i < numRecords; ++i)
