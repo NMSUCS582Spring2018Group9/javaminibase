@@ -38,6 +38,7 @@ db:
 	make -C index
 	make -C iterator
 	make -C columnar
+	make -C tools
 	
 doc:
 	$(JAVADOC) $(DOCFILES)

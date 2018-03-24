@@ -86,4 +86,11 @@ TupleTest:TupleTest.java
 tupletest: TupleTest
 	$(JAVA) tests.TupleTest
 
+# test columnarfile 
+
+CFTest:CFTest.java
+	$(JAVAC) TestDriver.java CFTest.java
+
+cftest: CFTest
+	$(JAVA) tests.CFTest
 
