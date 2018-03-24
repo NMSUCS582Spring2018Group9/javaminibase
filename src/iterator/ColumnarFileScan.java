@@ -9,7 +9,7 @@ import index.*;
 
 public class ColumnarFileScan extends Iterator {
 
-	public ColumnarFileScan(String file_name, AttrType[] attrs, short[] str_sizes, int num_out_fields, FldSpec[] fields,
+	public ColumnarFileScan(String file_name, AttrType[] attrs, short[] str_sizes, FldSpec[] fields,
 			CondExpr[] filters) {
 		// TODO
 	}
