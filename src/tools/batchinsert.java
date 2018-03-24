@@ -44,11 +44,12 @@ public class batchinsert {
 	 *  				- Healfile.insertRecord(byte[] recordPtr)
 	 *  				- Columnarfile.insertTuple(byte[] tuplePtr)
 	 */
-	static byte[] CreateRecord(AttrType[] types, String[] attributes)
+	static byte[] CreateRecord(AttrType[] types, String[] attributes, short[] sSizes)
 	{
 		byte[] buff = new byte[1024];
 		byte[] ret_buff = null;
 		int pos = 0;
+		int stringsCounter = 0;
 		
 		try {
 		for(int i = 0; i < types.length; ++i)
@@ -61,11 +62,11 @@ public class batchinsert {
 				pos += 4;
 				break;
 			case AttrType.attrString:
-				short str_sz = (short)attributes[i].length();
-				Convert.setShortValue(str_sz, pos, buff);
-				pos += 2;
-				Convert.setStrValue(attributes[i], pos, buff);
-				pos += str_sz * 2;	
+				// allocate a fixed size array based on column size specified in sSizes
+				byte[] strBytes = new byte[sSizes[stringsCounter++]];
+				System.arraycopy(attributes[i].getBytes(), 0, strBytes, 0, attributes[i].getBytes().length);
+				System.arraycopy(strBytes, 0, buff, pos, strBytes.length);
+				pos += strBytes.length;	
 				break;
 			case AttrType.attrReal:
 				float float_val = Float.parseFloat(attributes[i]);
@@ -96,6 +97,7 @@ public class batchinsert {
 			System.exit(1);
 		}
 		
+		final int STRING_COLUMN_SIZE = 80;		// fixed-size string fields
 		final int NUM_PAGES = 1024; 			// DB size = 1 MB
 		final int NUM_BUFFERS = 100; 			// memory buffer pool size
 		String tableName = "table_1";
@@ -103,6 +105,7 @@ public class batchinsert {
 		String db_name = args[1];
 		String db_type = args[2];
 		int num_columns = Integer.parseInt(args[3]);
+		int numStringColumns = 0;
 		
 		AttrType[] columnsTypes = new AttrType[num_columns];
 		String[] columnsNames = new String[num_columns];
@@ -149,6 +152,19 @@ public class batchinsert {
 					columnsTypes[i] = StringToAttrType(name_type[1]);
 				}
 				
+				// count number of string columns
+				for(int i = 0; i < columnsTypes.length; ++i)
+					if(columnsTypes[i].attrType == AttrType.attrString)
+						++numStringColumns;
+				
+				//TODO(aalbaltan) TEST CASE: try passing an input file that contains no string columns
+				short[] stringsSizes = null;
+				if(numStringColumns > 0) {
+					stringsSizes = new short[numStringColumns];
+					for(int i = 0; i < stringsSizes.length; ++i)
+						stringsSizes[i] = STRING_COLUMN_SIZE;
+				}
+				
 				if(db_type.equals("row")) // row-oriented relation 
 				{
 					tableName += "_row";
@@ -162,7 +178,7 @@ public class batchinsert {
 						//sBuffer.append(line);
 						//sBuffer.append("\n");
 						String[] columnsData = line.split(" ");
-						byte[] recordByte = CreateRecord(columnsTypes, columnsData);
+						byte[] recordByte = CreateRecord(columnsTypes, columnsData, stringsSizes);
 						heapFile.insertRecord(recordByte);
 						++recordsInserted;
 					}
@@ -175,7 +191,7 @@ public class batchinsert {
 				else if(db_type.equals("column")) // column-oriented relation 
 				{
 					tableName += "_column";
-					Columnarfile columnarFile = new Columnarfile(tableName, num_columns, columnsTypes);
+					Columnarfile columnarFile = new Columnarfile(tableName, num_columns, columnsTypes, stringsSizes);
 					System.out.printf("Inserting records into %s.\n", tableName);
 					
 					int recordsInserted = 0;
@@ -186,8 +202,26 @@ public class batchinsert {
 						//sBuffer.append(line);
 						//sBuffer.append("\n");
 						String[] columnsData = line.split(" ");
-						byte[] recordByte = CreateRecord(columnsTypes, columnsData);
-						columnarFile.insertTuple(recordByte);
+						//byte[] recordByte = CreateRecord(columnsTypes, columnsData);
+						Tuple t = new Tuple();
+						t.setHdr((short)num_columns, columnsTypes, stringsSizes);
+						
+						for(int i = 0; i < columnsData.length; ++i)
+						{
+							switch(columnsTypes[i].attrType)
+							{
+							case AttrType.attrInteger:
+								t.setIntFld(i+1, Integer.parseInt(columnsData[i]));
+								break;
+							case AttrType.attrString:
+								t.setStrFld(i+1, columnsData[i]);
+								break;
+							case AttrType.attrReal:
+								t.setFloFld(i+1, Float.parseFloat(columnsData[i]));
+								break;
+							}
+						}
+						columnarFile.insertTuple(t.getTupleByteArray());
 						++recordsInserted;
 					}
 					long end = System.nanoTime();
@@ -227,6 +261,9 @@ public class batchinsert {
 			} catch (FieldNumberOutOfBoundException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
+			} catch (InvalidTypeException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
 			}
 		}
 		
@@ -234,7 +271,6 @@ public class batchinsert {
 			sysdef.JavabaseBM.flushAllPages();
 			sysdef.JavabaseDB.closeDB();
 		}catch(Exception e) {/*empty*/}
-
 	}
 }
 

@@ -2,13 +2,8 @@ package tests;
 
 import java.io.*;
 import java.util.*;
-
-//import heap.*;
-
+import heap.*;
 import global.*;
-import heap.InvalidTupleSizeException;
-import heap.InvalidTypeException;
-import heap.Tuple;
 import columnar.*;
 
 
@@ -414,10 +409,14 @@ protected boolean test4()
 	attributes[2] = new AttrType(AttrType.attrString);
 	attributes[3] = new AttrType(AttrType.attrReal);
 	
+	short[] stringsSizes = new short[2];
+	stringsSizes[0] = 40;
+	stringsSizes[1] = 40;
+	
 	Columnarfile f = null;
 	//SystemDefs.JavabaseDB.printEntries();
 	try {
-		f = new Columnarfile(fileName, attributes.length, attributes);
+		f = new Columnarfile(fileName, attributes.length, attributes, stringsSizes);
 		
 		int id = 100;
 		String name = "name";
@@ -426,25 +425,22 @@ protected boolean test4()
 		
 		int numRecords = 50;
 		TID[] tupleIDs = new TID[numRecords]; 
-		LinkedList<byte[]> records = new LinkedList<>();
+		//LinkedList<byte[]> records = new LinkedList<>();
 		LinkedList<Tuple> tuples = new LinkedList<>();
 		
 		// create and insert numRecords records
 		for(int i = 0; i < numRecords; ++i)
 		{
-			records.add(createRecord(id++, name+i, major+i, credit++));
-			tupleIDs[i] = f.insertTuple(records.get(i));
+			//records.add(createRecord(id++, name+i, major+i, credit++));
+			Tuple t = new Tuple();
+			t.setHdr((short)attributes.length, attributes, stringsSizes);
+			t.setIntFld(1, id++);
+			t.setStrFld(2, name+i);
+			t.setStrFld(3, major+i);
+			t.setFloFld(4, credit++);
+			
+			tupleIDs[i] = f.insertTuple(t.getTupleByteArray());
 		}
-		
-		// update the value of some records
-		AttrType[] type2 = new AttrType[1];
-		type2[0] = new AttrType(AttrType.attrString);
-		String updateName = "Abdu";
-		byte[] data4 = new byte[2 + updateName.length()*2];
-		Convert.setShortValue((short) updateName.length(), 0, data4);
-		Convert.setStrValue(updateName, 2, data4);
-		Tuple t5 = createTuple(data4, type2);			
-		f.updateColumnofTuple(tupleIDs[numRecords/2], t5, 1);
 		
 		// retrieve records using TupleScan object
 		System.out.println("Reading tuples using TupleScan");
@@ -512,6 +508,121 @@ protected boolean test4()
 	
 	
 	return status;
+}
+
+protected boolean test5()
+{		
+	// this test is disabled by default. it's used to read the records/tuples inserted by batchinsert program.
+	boolean run = false;
+	if(run)
+	{
+		System.out.println ("\n  Test 5: batchinsert test\n");
+		boolean status = OK;
+		
+		// open database 100 buffers
+		String column_db_name = "/home/abdu/batchinsert_db_column";
+		String row_db_name = "/home/abdu/batchinsert_db_row";
+		
+		SystemDefs sysdef = new SystemDefs(column_db_name,0,100,"Clock");
+				 
+		String tableName;	// must match table name used in batchinsert
+		
+		AttrType[] attributes = new AttrType[4];
+		attributes[0] = new AttrType(AttrType.attrInteger);
+		attributes[1] = new AttrType(AttrType.attrString);
+		attributes[2] = new AttrType(AttrType.attrString);
+		attributes[3] = new AttrType(AttrType.attrReal);
+		
+		short[] stringsSizes = new short[2];
+		stringsSizes[0] = 80;
+		stringsSizes[1] = 80;
+		
+		// column test
+		Columnarfile f = null;
+		try {
+			tableName = "table_1_column";
+			f = new Columnarfile(tableName, attributes.length, attributes, stringsSizes);
+			
+			System.out.printf("There are %d tuples in %s:%s\n", f.getTupleCnt(), column_db_name, tableName);
+			// retrieve records using TupleScan object
+			System.out.println("Reading tuples using TupleScan");
+			TupleScan scanner =  f.openTupleScan();
+			Tuple t;
+			TID tid = new TID(attributes.length);
+			for(t = scanner.getNext(tid); 
+					t != null; 
+					t = scanner.getNext(tid))
+			{
+				System.out.printf("%d, %s, %s, %.2f\n", 
+						t.getIntFld(1), 
+						t.getStrFld(2), 
+						t.getStrFld(3), 
+						t.getFloFld(4));
+			}
+			scanner.closetuplescan();
+			System.out.println();
+			
+		}catch(Exception e) {
+			status = FAIL;
+			System.out.println("test failed: " + e.getMessage());
+		}
+		
+		try {
+			SystemDefs.JavabaseBM.flushAllPages();
+			SystemDefs.JavabaseDB.closeDB();
+		}catch(Exception e) {/*empty*/}
+		
+		
+		// row test
+		sysdef = new SystemDefs(row_db_name,0,100,"Clock");
+		
+		Heapfile f2 = null;
+		try {
+			tableName = "table_1_row";
+			f2 = new Heapfile(tableName);
+			
+			System.out.printf("There are %d tuples in %s:%s\n", f2.getRecCnt(), row_db_name, tableName);
+			// retrieve records using TupleScan object
+			System.out.println("Reading tuples using TupleScan");
+			Scan scanner = f2.openScan();
+			Tuple t = null;
+			RID rid = new RID();
+			for(t = scanner.getNext(rid); 
+					t != null; 
+					t = scanner.getNext(rid))
+			{
+				int pos = 0;
+				int id = Convert.getIntValue(pos, t.getTupleByteArray());
+				pos += 4;
+				
+				byte [] strByte = new byte[stringsSizes[0]];
+				System.arraycopy(t.getTupleByteArray(), pos, strByte, 0, strByte.length);
+				String name = new String(strByte).trim();
+				pos += stringsSizes[0];
+
+				strByte = new byte[stringsSizes[1]];
+				System.arraycopy(t.getTupleByteArray(), pos, strByte, 0, strByte.length);
+				String major = new String(strByte).trim();
+				pos += stringsSizes[1];
+				float credit = Convert.getFloValue(pos, t.getTupleByteArray());
+				
+				System.out.printf("%d %s %s %f\n", id, name, major, credit);
+			}
+			scanner.closescan();			
+		}catch(Exception e) {
+			status = FAIL;
+			System.out.println("test failed: " + e.getMessage());
+		}
+		
+		try {
+			SystemDefs.JavabaseBM.flushAllPages();
+			SystemDefs.JavabaseDB.closeDB();
+		}catch(Exception e) {/*empty*/}
+		
+		
+		return status;
+	}
+	return true;
 }
 
 }

@@ -87,8 +87,11 @@ public class Columnarfile implements Filetype,  GlobalConst {
 		_type = new AttrType[numColumns];
 		_type = type;
 		
-		_stringsSizes = new short[stringsSizes.length];
-		_stringsSizes = stringsSizes;
+		// bug fix
+		if(stringsSizes != null) {
+			_stringsSizes = new short[stringsSizes.length];
+			_stringsSizes = stringsSizes;
+		}
 		
 		// Open or create files
 		_headerFile = new Heapfile(_fileName + ".hdr");
@@ -184,8 +187,6 @@ public class Columnarfile implements Filetype,  GlobalConst {
 		tuple.setHdr((short)_numColumns, _type, _stringsSizes); 
 		
 		// insert each column's value into its associated file
-		int pos = 0;
-		int stringTypesCounter = 0;
 		for(int i = 0; i < _numColumns; ++i) {
 			switch(_type[i].attrType)
 			{
@@ -193,7 +194,6 @@ public class Columnarfile implements Filetype,  GlobalConst {
 				int int_val = tuple.getIntFld(i+1);
 				data = new byte[4];
 				Convert.setIntValue(int_val, 0, data);
-				pos += 4;
 				break;
 				
 			case AttrType.attrString:
@@ -206,7 +206,6 @@ public class Columnarfile implements Filetype,  GlobalConst {
 				float float_val = tuple.getFloFld(i+1);
 				data = new byte[4];
 				Convert.setFloValue(float_val, 0, data);
-				pos += 4;
 				break;
 			case AttrType.attrNull:
 				break;
@@ -422,67 +421,7 @@ public class Columnarfile implements Filetype,  GlobalConst {
 	 *            
 	 * @return true if a tuple has been updated successfully, false otherwise
 	 * 
-	 */
-//	public boolean updateColumnofTuple(TID tid, Tuple newTuple, int column)
-//	{
-//		if(tid == null || newTuple == null)
-//			throw new IllegalArgumentException("invalid tid/tuple");
-//		
-//		if(column < 0 || column >= _numColumns)
-//			throw new IndexOutOfBoundsException();
-//		
-//		boolean bRecordFound = false;
-//		RID old_rid = new RID();
-//		
-//		// look for TID in header file
-//		try {
-//			Scan s = _headerFile.openScan();
-//			
-//			// look through records in header file
-//			for(Tuple t = s.getNext(old_rid); t != null; t = s.getNext(old_rid))
-//			{
-//				TID t_id = new TID(t.getTupleByteArray());
-//				if(t_id.equals(tid))
-//				{
-//					bRecordFound = true;
-//					break;
-//				}
-//			}
-//			s.closescan();
-//		} catch (Exception e) {
-//			return false;
-//		}
-//		
-//		if(!bRecordFound) // tuple does not exist
-//			return false;
-//		
-//		RID columnRID = null;
-//		boolean bRecordUpdated = false;
-//		AttrType[] columnType = new AttrType[1];
-//		columnType[0] = _type[column];
-//		// delete the record from the specified column
-//		try {
-//			_columnsFiles[column].deleteRecord(tid.getRID(column));
-//			columnRID = _columnsFiles[column].insertRecord(tupleToByteArray(newTuple, columnType));
-//			_headerFile.deleteRecord(old_rid);
-//			
-//			TID newTID = tid;
-//			newTID.setRID(column, columnRID);			
-//			byte[] data = new byte[newTID.getLength()];
-//			newTID.writeToByteArray(data, 0);
-//			_headerFile.insertRecord(data);
-//			
-//			bRecordUpdated = true;
-//			
-//		} catch (Exception e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-//		
-//		return bRecordUpdated;
-//	}
-	
-	
+	 */	
 	public boolean updateColumnofTuple(TID tid, Tuple newTuple, int column)
 	{
 		if(tid == null || newTuple == null)
@@ -561,9 +500,9 @@ public class Columnarfile implements Filetype,  GlobalConst {
 				pos += 4;
 				break;
 			case AttrType.attrString:
-				byte[] str = t.getStrFld(i+1).getBytes();
-				System.arraycopy(str, 0, buff, 0, str.length);
-				pos += str.length;
+				byte[] strBytes = t.getStrFld(i+1).getBytes();
+				System.arraycopy(strBytes, 0, buff, 0, strBytes.length);
+				pos += strBytes.length;
 				break;
 			case AttrType.attrReal:
 				float float_val = t.getFloFld(i+1);
