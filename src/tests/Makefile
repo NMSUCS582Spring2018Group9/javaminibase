@@ -70,6 +70,14 @@ SMJoin:SM_JoinTest.java
 sortmerge: SMJoin
 	$(JAVA) tests.SM_JoinTest
 
+# test columnarfile 
+
+CFTest:CFTest.java
+	$(JAVAC) TestDriver.java CFTest.java
+
+cftest: CFTest
+	$(JAVA) tests.CFTest
+
 # test TupleID
 
 TupleTest:TupleTest.java

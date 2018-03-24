@@ -45,6 +45,10 @@ doc:
 
 test: 
 	cd tests; make bmtest dbtest; whoami; make hftest bttest indextest jointest sorttest sortmerge cftest
+	
+# test columnar package only
+columnar_test:
+	cd tests; make cftest
 
 clean:
 	\rm -f $(CLASSPATH)/*.class *~ \#* core $(JARFILES) TRACE

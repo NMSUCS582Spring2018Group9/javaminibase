@@ -5,6 +5,7 @@ import java.util.*;
 import heap.*;
 import global.*;
 import columnar.*;
+import diskmgr.*;
 
 
 class CFDriver extends TestDriver implements GlobalConst
@@ -100,6 +101,7 @@ public boolean runTests () {
 		
 		return data;
 	}
+
 
 	protected boolean test1()
 	{		
@@ -338,13 +340,11 @@ public boolean runTests () {
 			
 			int numRecords = 50;
 			TID[] tupleIDs = new TID[numRecords]; 
-			//LinkedList<byte[]> records = new LinkedList<>();
 			LinkedList<Tuple> tuples = new LinkedList<>();
 			
 			// create and insert numRecords records
 			for(int i = 0; i < numRecords; ++i)
 			{
-				//records.add(createRecord(id++, name+i, major+i, credit++));
 				Tuple t = new Tuple();
 				t.setHdr((short)attributes.length, attributes, stringsSizes);
 				t.setIntFld(1, id++);

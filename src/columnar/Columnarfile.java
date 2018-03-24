@@ -5,6 +5,7 @@ import java.io.IOException;
 import global.*;
 import heap.*;
 
+
 interface  Filetype {
 	  int TEMP = 0;
 	  int ORDINARY = 1;
@@ -87,12 +88,12 @@ public class Columnarfile implements Filetype,  GlobalConst {
 		_type = new AttrType[numColumns];
 		_type = type;
 		
-		// bug fix
+
 		if(stringsSizes != null) {
 			_stringsSizes = new short[stringsSizes.length];
 			_stringsSizes = stringsSizes;
 		}
-		
+    
 		// Open or create files
 		_headerFile = new Heapfile(_fileName + ".hdr");
 		for(int i = 0; i < numColumns; ++i)
@@ -133,6 +134,7 @@ public class Columnarfile implements Filetype,  GlobalConst {
 	 * used anymore as it caused some serious problems with other issues. I decided to keep NOTE#1 as reference. 
 	 * 
 	 * NOTE#1(aalbaltan): there wasn't much explanation on the format of tuplePtr. There are different ways to do
+
 	 * the format. My first thought was to use the Tuple class. However, the class was not documented properly 
 	 * and it took me a while to figure out proper usage. As a result, I decided to a format similar to the 
 	 * following example.
@@ -187,6 +189,7 @@ public class Columnarfile implements Filetype,  GlobalConst {
 		tuple.setHdr((short)_numColumns, _type, _stringsSizes); 
 		
 		// insert each column's value into its associated file
+
 		for(int i = 0; i < _numColumns; ++i) {
 			switch(_type[i].attrType)
 			{
@@ -206,6 +209,7 @@ public class Columnarfile implements Filetype,  GlobalConst {
 				float float_val = tuple.getFloFld(i+1);
 				data = new byte[4];
 				Convert.setFloValue(float_val, 0, data);
+
 				break;
 			case AttrType.attrNull:
 				break;
@@ -228,7 +232,7 @@ public class Columnarfile implements Filetype,  GlobalConst {
 		return tupleId;
 	}
 	
-	
+
 	/**
 	 * Read a tuple from file
 	 * 
@@ -406,7 +410,6 @@ public class Columnarfile implements Filetype,  GlobalConst {
 		
 		boolean bRecordUpdated = false;
 		try {
-			//byte[] tupleBytes = tupleToByteArray(newTuple, _type);
 			insertTuple(newTuple.getTupleByteArray());
 			bRecordUpdated = true;
 		}catch(Exception e) {
