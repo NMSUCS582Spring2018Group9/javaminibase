@@ -331,12 +331,19 @@ public class Columnarfile implements Filetype,  GlobalConst {
 	 * 				index of the column to be scanned [0,numColumns)
 	 *            
 	 * @return scanned column
+	 * @throws IOException 
+	 * @throws InvalidTupleSizeException 
 	 * 
 	 */
-	public Scan openColumnScan(int columnNo)
+	public Scan openColumnScan(int columnNo) throws 
+		InvalidTupleSizeException, 
+		IOException
 	{
-		//TODO(aalbaltan) implement
-		return null;
+		// validate column index
+		if(columnNo < 0 || columnNo >= _numColumns)
+			return null;
+		Scan scan = _columnsFiles[columnNo].openScan();
+		return scan;
 	}
 	
 	/**

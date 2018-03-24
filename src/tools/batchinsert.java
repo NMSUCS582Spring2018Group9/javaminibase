@@ -17,8 +17,6 @@ import columnar.Columnarfile;
  * @author aalbaltan
  * 
  */
-
-
 public class batchinsert {
 
 	// Auxiliary function that translate a given string into AttrType type
@@ -97,7 +95,7 @@ public class batchinsert {
 			System.exit(1);
 		}
 		
-		final int STRING_COLUMN_SIZE = 80;		// fixed-size string fields
+		final int STRING_COLUMN_SIZE = 30;		// fixed-size string fields
 		final int NUM_PAGES = 1024; 			// DB size = 1 MB
 		final int NUM_BUFFERS = 100; 			// memory buffer pool size
 		String tableName = "table_1";
@@ -271,6 +269,11 @@ public class batchinsert {
 			sysdef.JavabaseBM.flushAllPages();
 			sysdef.JavabaseDB.closeDB();
 		}catch(Exception e) {/*empty*/}
+		
+		// print page I/O info
+		System.out.printf("total page reads: %d\ttotal page writes: %d\n", 
+				sysdef.JavabaseDB.GetNumberOfPageReads(),
+				sysdef.JavabaseDB.GetNumberOfPageWrites());
 	}
 }
 

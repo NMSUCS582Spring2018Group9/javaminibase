@@ -11,6 +11,18 @@ public class DB implements GlobalConst {
   
   private static final int bits_per_page = MAX_SPACE * 8;
   
+  // Issue#1: adding page counter to disk manager.
+  
+  /* total number of pages read */ 
+  private static int num_pages_read = 0;
+  
+  /* total number of pages written */
+  private static int num_pages_written = 0;
+  
+  /* page counter access methods */
+  public static int GetNumberOfPageReads() { return num_pages_read;}
+  public static int GetNumberOfPageWrites() { return num_pages_written;}
+  
   
   /** Open the database with the given name.
    *
@@ -149,6 +161,9 @@ public class DB implements GlobalConst {
     byte [] buffer = apage.getpage();  //new byte[MINIBASE_PAGESIZE];
     try{
       fp.read(buffer);
+      
+      // register page read from disk
+      ++num_pages_read;
     }
     catch (IOException e) {
       throw new FileIOException(e, "DB file I/O error");
@@ -179,6 +194,9 @@ public class DB implements GlobalConst {
     // Write the appropriate number of bytes.
     try{
       fp.write(apage.getpage());
+      
+      // register page write to disk
+      ++num_pages_written;
     }
     catch (IOException e) {
       throw new FileIOException(e, "DB file I/O error");

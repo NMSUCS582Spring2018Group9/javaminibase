@@ -395,7 +395,7 @@ public boolean runTests () {
 
 protected boolean test4()
 {		
-	System.out.println ("\n  Test 4: TupleScan getNext and position\n");
+	System.out.println ("\n  Test 4: ColumnScan and TupleScan getNext and position\n");
 	boolean status = OK;
 	
 	// create database with 100 pages and 100 buffers
@@ -495,6 +495,20 @@ protected boolean test4()
 			}
 		}
 		
+		
+		// Column Scan (scanning credit column)
+		System.out.printf("\nStarting column scan on credit column (column 4)\n");
+		Scan columnScan = f.openColumnScan(3);
+		if(columnScan == null)
+			status = FAIL;
+		else
+		{
+			RID rid = new RID();
+			for(t = columnScan.getNext(rid); t != null; t = columnScan.getNext(rid)) {
+				credit = Convert.getFloValue(0, t.getTupleByteArray());
+				System.out.println(credit);
+			}
+		}
 		
 	}catch(Exception e) {
 		status = FAIL;

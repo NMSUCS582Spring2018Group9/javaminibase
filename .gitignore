@@ -30,3 +30,6 @@ src/typescript
 # Eclipse files
 src/.classpath
 src/.project
+.classpath
+.project
+.settings
