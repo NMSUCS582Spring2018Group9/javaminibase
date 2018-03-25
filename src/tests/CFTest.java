@@ -524,10 +524,11 @@ protected boolean test4()
 	return status;
 }
 
+// this tests requires a column_db and row_db to exist.
+// this test is disabled by default. it's used to read the records/tuples inserted by batchinsert program.
 protected boolean test5()
-{		
-	// this test is disabled by default. it's used to read the records/tuples inserted by batchinsert program.
-	boolean run = false;
+{	
+	boolean run = true;
 	if(run)
 	{
 		System.out.println ("\n  Test 5: batchinsert test\n");
@@ -548,8 +549,8 @@ protected boolean test5()
 		attributes[3] = new AttrType(AttrType.attrReal);
 		
 		short[] stringsSizes = new short[2];
-		stringsSizes[0] = 80;
-		stringsSizes[1] = 80;
+		stringsSizes[0] = 30;
+		stringsSizes[1] = 30;
 		
 		// column test
 		Columnarfile f = null;
@@ -599,26 +600,17 @@ protected boolean test5()
 			// retrieve records using TupleScan object
 			System.out.println("Reading tuples using TupleScan");
 			Scan scanner = f2.openScan();
-			Tuple t = null;
+			Tuple t = new Tuple();
 			RID rid = new RID();
 			for(t = scanner.getNext(rid); 
 					t != null; 
 					t = scanner.getNext(rid))
 			{
-				int pos = 0;
-				int id = Convert.getIntValue(pos, t.getTupleByteArray());
-				pos += 4;
-				
-				byte [] strByte = new byte[stringsSizes[0]];
-				System.arraycopy(t.getTupleByteArray(), pos, strByte, 0, strByte.length);
-				String name = new String(strByte).trim();
-				pos += stringsSizes[0];
-
-				strByte = new byte[stringsSizes[1]];
-				System.arraycopy(t.getTupleByteArray(), pos, strByte, 0, strByte.length);
-				String major = new String(strByte).trim();
-				pos += stringsSizes[1];
-				float credit = Convert.getFloValue(pos, t.getTupleByteArray());
+				t.setHdr((short)attributes.length, attributes, stringsSizes);
+				int id = t.getIntFld(1);
+				String name = t.getStrFld(2);
+				String major = t.getStrFld(3);
+				float credit = t.getFloFld(4);
 				
 				System.out.printf("%d %s %s %f\n", id, name, major, credit);
 			}

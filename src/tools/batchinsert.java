@@ -31,61 +31,6 @@ public class batchinsert {
 			return new AttrType(AttrType.attrString);
 	}
 	
-	/*
-	 *  Auxiliary function to create a byte array from a string record. 
-	 *  	Example:
-	 *  		input:
-	 *  			1- attributes types {int, string, string, float}
-	 *  			2- an array of strings {"1", "Paul", "Athletics", "73"}
-	 *  		output: 
-	 *  			A byte array that will be passed to either:
-	 *  				- Healfile.insertRecord(byte[] recordPtr)
-	 *  				- Columnarfile.insertTuple(byte[] tuplePtr)
-	 */
-	static byte[] CreateRecord(AttrType[] types, String[] attributes, short[] sSizes)
-	{
-		byte[] buff = new byte[1024];
-		byte[] ret_buff = null;
-		int pos = 0;
-		int stringsCounter = 0;
-		
-		try {
-		for(int i = 0; i < types.length; ++i)
-		{
-			switch(types[i].attrType)
-			{
-			case AttrType.attrInteger:
-				int int_val = Integer.parseInt(attributes[i]);
-				Convert.setIntValue(int_val, pos, buff);
-				pos += 4;
-				break;
-			case AttrType.attrString:
-				// allocate a fixed size array based on column size specified in sSizes
-				byte[] strBytes = new byte[sSizes[stringsCounter++]];
-				System.arraycopy(attributes[i].getBytes(), 0, strBytes, 0, attributes[i].getBytes().length);
-				System.arraycopy(strBytes, 0, buff, pos, strBytes.length);
-				pos += strBytes.length;	
-				break;
-			case AttrType.attrReal:
-				float float_val = Float.parseFloat(attributes[i]);
-				Convert.setFloValue(float_val, pos, buff);
-				pos += 4;
-				break;
-			//TODO(aalbaltan) handle other cases
-			default:
-				break;
-			}
-		}
-		
-		ret_buff = new byte[pos];
-		System.arraycopy(buff, 0, ret_buff, 0, pos);
-		}catch(Exception e) {
-			e.printStackTrace();
-		}
-		
-		return ret_buff;
-	}
-	
 	public static void main(String[] args) {
 		final String usage = "\tUsage: batchinsert DATAFILENAME DBNAME DBTYPE NUMCOLUMNS\n";
 		
@@ -173,11 +118,26 @@ public class batchinsert {
 					long start = System.nanoTime();
 					// read actual data line by line
 					while((line = bReader.readLine()) != null) {
-						//sBuffer.append(line);
-						//sBuffer.append("\n");
 						String[] columnsData = line.split(" ");
-						byte[] recordByte = CreateRecord(columnsTypes, columnsData, stringsSizes);
-						heapFile.insertRecord(recordByte);
+						Tuple t = new Tuple();
+						t.setHdr((short)num_columns, columnsTypes, stringsSizes);
+						
+						for(int i = 0; i < columnsData.length; ++i)
+						{
+							switch(columnsTypes[i].attrType)
+							{
+							case AttrType.attrInteger:
+								t.setIntFld(i+1, Integer.parseInt(columnsData[i]));
+								break;
+							case AttrType.attrString:
+								t.setStrFld(i+1, columnsData[i]);
+								break;
+							case AttrType.attrReal:
+								t.setFloFld(i+1, Float.parseFloat(columnsData[i]));
+								break;
+							}
+						}
+						heapFile.insertRecord(t.getTupleByteArray());
 						++recordsInserted;
 					}
 					long end = System.nanoTime();
@@ -197,10 +157,7 @@ public class batchinsert {
 					
 					// read actual data line by line
 					while((line = bReader.readLine()) != null) {
-						//sBuffer.append(line);
-						//sBuffer.append("\n");
 						String[] columnsData = line.split(" ");
-						//byte[] recordByte = CreateRecord(columnsTypes, columnsData);
 						Tuple t = new Tuple();
 						t.setHdr((short)num_columns, columnsTypes, stringsSizes);
 						
