@@ -528,7 +528,7 @@ protected boolean test4()
 // this test is disabled by default. it's used to read the records/tuples inserted by batchinsert program.
 protected boolean test5()
 {	
-	boolean run = true;
+	boolean run = false;
 	if(run)
 	{
 		System.out.println ("\n  Test 5: batchinsert test\n");
