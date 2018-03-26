@@ -8,6 +8,13 @@ import global.*;
 import heap.*;
 import index.*;
 
+/**
+ * ColumnarFileScan Class
+ * 
+ * @author Shane
+ * @tester aalbaltan
+ * 
+ */
 public class ColumnarFileScan extends Iterator {
 
 	private short[] string_sizes;

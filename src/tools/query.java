@@ -73,7 +73,7 @@ public class query {
 		String db_name = args[0];
 		String column_name = args[1];
 		String operator = args[2];
-		String value = args[3].toLowerCase();
+		String value = args[3];
 		int num_buffers = 0;
 		try {
 			num_buffers = Integer.parseInt(args[4]); 			// memory buffer pool size
@@ -200,6 +200,8 @@ public class query {
 						System.out.printf("%s ", columnsNames[i]);
 					System.out.println();
 				}
+				else
+					System.out.println("no records match specified condition");
 				
 				while( t != null)
 				{
@@ -221,7 +223,39 @@ public class query {
 			// col query
 			else if(columnPage != null)
 			{
-				//TODO(aalbaltan) implement
+				ColumnarFileScan columnarFileScan = new ColumnarFileScan(
+						columnTableName, 
+						columnsTypes, 
+						stringsSizes, 
+						Sprojection, 
+						outFilter);
+				
+				// read and print all tuples in record set
+				Tuple t = columnarFileScan.get_next();
+				if(t!= null) {
+					for(int i = 0; i < columnsTypes.length; ++i)
+						System.out.printf("%s ", columnsNames[i]);
+					System.out.println();
+				}
+				else
+					System.out.println("no records match specified condition");
+				
+				while( t != null)
+				{
+					for(int i = 0; i < columnsTypes.length; ++i)
+					{
+						if(columnsTypes[i].attrType == AttrType.attrInteger)
+							System.out.printf("%d ", t.getIntFld(i+1));
+						else if(columnsTypes[i].attrType == AttrType.attrString)
+							System.out.printf("%s ", t.getStrFld(i+1));
+						else if(columnsTypes[i].attrType == AttrType.attrReal)
+							System.out.printf("%.2f ", t.getFloFld(i+1));
+					}
+					System.out.println();
+			    	t = columnarFileScan.get_next();
+				}
+				columnarFileScan.close();
+				System.out.println();
 			}
 			
 			long end = System.nanoTime();
