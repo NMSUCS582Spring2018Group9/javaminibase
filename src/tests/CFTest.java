@@ -7,7 +7,6 @@ import global.*;
 import columnar.*;
 import diskmgr.*;
 
-
 class CFDriver extends TestDriver implements GlobalConst
 {
 

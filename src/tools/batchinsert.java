@@ -47,6 +47,7 @@ public class batchinsert {
 		String datafile_name = args[0];
 		String db_name = args[1];
 		String db_type = args[2];
+		String tableHeader = new String();
 		int num_columns = Integer.parseInt(args[3]);
 		int numStringColumns = 0;
 		
@@ -82,11 +83,11 @@ public class batchinsert {
 			try {
 				FileReader fReader = new FileReader(f);
 				BufferedReader bReader = new BufferedReader(fReader);
-				StringBuffer sBuffer = new StringBuffer();
 				String line;
 				
 				// read data header and parse columns types
 				line = bReader.readLine();
+				tableHeader = line;
 				String[] pairs = line.split(pairs_delims);
 				for(int i = 0; i < num_columns; ++i)
 				{
@@ -230,7 +231,29 @@ public class batchinsert {
 		// print page I/O info
 		System.out.printf("total page reads: %d\ttotal page writes: %d\n", 
 				sysdef.JavabaseDB.GetNumberOfPageReads(),
-				sysdef.JavabaseDB.GetNumberOfPageWrites());
+				sysdef.JavabaseDB.GetNumberOfPageWrites());	
+		
+		try {
+			// store header in another table. This is needed by query to identify the columns of the table since
+			// javaminibase base does not have a catalog (catalog is disabled)
+			sysdef = new SystemDefs(db_name,0,NUM_BUFFERS,"Clock");
+			Heapfile typeFile = new Heapfile(tableName+"_type");
+			int recordsCount = typeFile.getRecCnt();
+			if(recordsCount == 0) {
+				Tuple headerTuple = new Tuple();
+				AttrType[] headerTypes = new AttrType[1];
+				headerTypes[0] = new AttrType(AttrType.attrString);
+				short[] headerStringSizes = new short[1];
+				headerStringSizes[0] = 900;
+				headerTuple.setHdr((short)1, headerTypes, headerStringSizes);
+				headerTuple.setStrFld(1, tableHeader);
+				typeFile.insertRecord(headerTuple.getTupleByteArray());
+				sysdef.JavabaseBM.flushAllPages();
+				sysdef.JavabaseDB.closeDB();
+			}
+		}catch(Exception e) {
+			e.printStackTrace();
+		}
 	}
 }
 
