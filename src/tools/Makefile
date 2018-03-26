@@ -7,9 +7,16 @@ JAVAC = $(JDKPATH)/bin/javac -g -classpath $(CLASSPATH)
 JAVA  = $(JDKPATH)/bin/java  -classpath $(CLASSPATH)
 
 # batch insert program
+all: BatchInsert Query
 
 BatchInsert: batchinsert.java
 	$(JAVAC) batchinsert.java
 
 batchinsert: BatchInsert
 	$(JAVA) tools.batchinsert
+
+Query: query.java
+	$(JAVAC) query.java
+
+query: Query
+	$(JAVA) tools.query
