@@ -33,3 +33,4 @@ src/.project
 .classpath
 .project
 .settings
+/bin/

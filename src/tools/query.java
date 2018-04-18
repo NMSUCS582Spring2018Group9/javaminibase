@@ -57,26 +57,27 @@ public class query {
 	}
 	
 	public static void main(String[] args) {
-		final String usage = "\tUsage: query DBNAME VALUECONSTRAINT NUMBUF\n";
+		final String usage = "\tUsage: query DBNAME TABLENAME VALUECONSTRAINT NUMBUF\n";
 		
 		// validate arguments
-		if(args.length != 5) {
+		if(args.length != 6) {
 			System.out.println(usage);
 			System.exit(1);
 		}
 		
 		final int STRING_COLUMN_SIZE = 30;				// fixed-size string fields
-		String rowTableName = "table_1_row";
-		String columnTableName = "table_1_column";
 		String headerTableName = new String();
 		String headerString = new String();
 		String db_name = args[0];
-		String column_name = args[1];
-		String operator = args[2];
-		String value = args[3];
+		String tableName = args[1];
+		String rowTableName = tableName + "_row";
+		String columnTableName = tableName + "_column";
+		String column_name = args[2];
+		String operator = args[3];
+		String value = args[4];
 		int num_buffers = 0;
 		try {
-			num_buffers = Integer.parseInt(args[4]); 			// memory buffer pool size
+			num_buffers = Integer.parseInt(args[5]); 			// memory buffer pool size
 		} catch(NumberFormatException e) {
 			System.out.println("invalid NUMBUF input\n" + usage);
 			System.exit(1);

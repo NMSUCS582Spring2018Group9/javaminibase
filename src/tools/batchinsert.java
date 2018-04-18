@@ -32,10 +32,10 @@ public class batchinsert {
 	}
 	
 	public static void main(String[] args) {
-		final String usage = "\tUsage: batchinsert DATAFILENAME DBNAME DBTYPE NUMCOLUMNS\n";
+		final String usage = "\tUsage: batchinsert DATAFILENAME DBNAME DBTYPE TABLENAME NUMCOLUMNS\n";
 		
 		// validate arguments
-		if(args.length != 4) {
+		if(args.length != 5) {
 			System.out.println(usage);
 			System.exit(1);
 		}
@@ -43,12 +43,12 @@ public class batchinsert {
 		final int STRING_COLUMN_SIZE = 30;		// fixed-size string fields
 		final int NUM_PAGES = 1024; 			// DB size = 1 MB
 		final int NUM_BUFFERS = 100; 			// memory buffer pool size
-		String tableName = "table_1";
 		String datafile_name = args[0];
 		String db_name = args[1];
 		String db_type = args[2];
+		String tableName = args[3];
 		String tableHeader = new String();
-		int num_columns = Integer.parseInt(args[3]);
+		int num_columns = Integer.parseInt(args[4]);
 		int numStringColumns = 0;
 		
 		AttrType[] columnsTypes = new AttrType[num_columns];
