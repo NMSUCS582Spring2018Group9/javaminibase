@@ -6,10 +6,10 @@ import iterator.*;
 import java.io.File;
 
 /**
- * The query program performs query on existing row/column-oriented database relations and displays results based on specified conditions.
+ * The qsort program accesses a database table and sorts the results based on a specified column
  *  
  * 
- * @author aalbaltan
+ * @author Shane
  * 
  */
 public class qsort {
@@ -26,25 +26,6 @@ public class qsort {
 			return new AttrType(AttrType.attrString);
 	}
 	
-	// Auxiliary function that does string to AttrOperator mapping
-	static AttrOperator StringToAttrOperator(String op)
-	{
-		if(op.equals("="))
-			return new AttrOperator(AttrOperator.aopEQ);
-		else if(op.equals("!="))
-			return new AttrOperator(AttrOperator.aopNE);
-		else if(op.equals("<"))
-			return new AttrOperator(AttrOperator.aopLT);
-		else if(op.equals("<="))
-			return new AttrOperator(AttrOperator.aopLE);
-		else if(op.equals(">"))
-			return new AttrOperator(AttrOperator.aopGT);
-		else if(op.equals(">="))
-			return new AttrOperator(AttrOperator.aopGE);
-		
-		return null;
-	}
-	
 	// Auxiliary function to get the index associated with column's name
 	static int GetAttrType(String[] columnNames, String column)
 	{
@@ -57,26 +38,26 @@ public class qsort {
 	}
 	
 	public static void main(String[] args) {
-		final String usage = "\tUsage: query DBNAME VALUECONSTRAINT NUMBUF\n";
+		final String usage = "\tUsage: qsort DBNAME TABLENAME COLUMNNAME NUMBUF\n";
 		
 		// validate arguments
-		if(args.length != 5) {
+		if(args.length != 4) {
 			System.out.println(usage);
 			System.exit(1);
 		}
 		
 		final int STRING_COLUMN_SIZE = 30;				// fixed-size string fields
-		String rowTableName = "table_1_row";
-		String columnTableName = "table_1_column";
+		final int buffer_pages = 8;
 		String headerTableName = new String();
 		String headerString = new String();
 		String db_name = args[0];
-		String column_name = args[1];
-		String operator = args[2];
-		String value = args[3];
+		String table_name = args[1];
+		String rowTableName = table_name + "_row";
+		String columnTableName = table_name + "_column";
+		String column_name = args[2];
 		int num_buffers = 0;
 		try {
-			num_buffers = Integer.parseInt(args[4]); 			// memory buffer pool size
+			num_buffers = Integer.parseInt(args[3]); 			// memory buffer pool size
 		} catch(NumberFormatException e) {
 			System.out.println("invalid NUMBUF input\n" + usage);
 			System.exit(1);
@@ -155,23 +136,25 @@ public class qsort {
 					stringsSizes[i] = STRING_COLUMN_SIZE;
 			}
 			
-			// preparing query condition
+			// preparing query condition TODO: change to sorting condition 
 			//NOTE: CondExpr array has to contain an extra (null) element otherwise PredEval.Eval would throw an exception 
 			int columnIndex = GetAttrType(columnsNames, column_name);
-			CondExpr[] outFilter = new CondExpr[2];
-			outFilter[0] = new CondExpr();
-			outFilter[0].op    = StringToAttrOperator(operator);
-			outFilter[0].next  = null;
-			outFilter[0].type1 = new AttrType(AttrType.attrSymbol);
-			outFilter[0].type2 = columnsTypes[columnIndex];
-			outFilter[0].operand1.symbol = new FldSpec (new RelSpec(RelSpec.outer),columnIndex+1);
-			//outFilter[0].operand2.integer = 990;
-			if(columnsTypes[columnIndex].attrType == AttrType.attrInteger)
-				outFilter[0].operand2.integer = Integer.parseInt(value);
-			else if(columnsTypes[columnIndex].attrType == AttrType.attrString)
-				outFilter[0].operand2.string = value;
-			else if(columnsTypes[columnIndex].attrType == AttrType.attrReal)
-				outFilter[0].operand2.real = Float.parseFloat(value);
+			int sortFldLen;
+			switch (columnsTypes[columnIndex].attrType)
+			{
+			case AttrType.attrInteger:
+			  sortFldLen = 4;
+			  break;
+			case AttrType.attrReal:
+			  sortFldLen = 4;
+			  break;
+			case AttrType.attrString:
+			  sortFldLen = STRING_COLUMN_SIZE;
+			  break;
+			default:
+			  //error("Unknown type");
+			  return;
+			}
 			
 			// projection list
 			FldSpec [] Sprojection = new FldSpec[columnsTypes.length];
@@ -181,80 +164,114 @@ public class qsort {
 			// profiling
 			long start = System.nanoTime();
 			
-			// row query
+			// row query TODO: add sorting on row
 			if(rowPage != null)
 			{
-				FileScan fileScan = new FileScan(
+				FileScan fileScan = null;
+				Sort sorter = null;
+				try { 
+					fileScan = new FileScan(
 						rowTableName, 
 						columnsTypes,
 						stringsSizes,
 						(short) columnsTypes.length, 
 						(short) columnsTypes.length,
 						Sprojection, 
-						outFilter);
-				
-				// read and print all tuples in record set
-				Tuple t = fileScan.get_next();
-				if(t!= null) {
-					for(int i = 0; i < columnsTypes.length; ++i)
-						System.out.printf("%s ", columnsNames[i]);
-					System.out.println();
-				}
-				else
-					System.out.println("no records match specified condition");
-				
-				while( t != null)
-				{
-					for(int i = 0; i < columnsTypes.length; ++i)
-					{
-						if(columnsTypes[i].attrType == AttrType.attrInteger)
-							System.out.printf("%d ", t.getIntFld(i+1));
-						else if(columnsTypes[i].attrType == AttrType.attrString)
-							System.out.printf("%s ", t.getStrFld(i+1));
-						else if(columnsTypes[i].attrType == AttrType.attrReal)
-							System.out.printf("%.2f ", t.getFloFld(i+1));
+						null);
+		
+					sorter = new Sort(columnsTypes, 
+						(short) columnsTypes.length, 
+						stringsSizes, 
+						fileScan, 
+						columnIndex + 1, 
+						new TupleOrder(TupleOrder.Ascending), 
+						sortFldLen, buffer_pages);
+					
+					// read and print all tuples in record set
+					Tuple t = sorter.get_next();
+					if(t!= null) {
+						for(int i = 0; i < columnsTypes.length; ++i)
+							System.out.printf("%s ", columnsNames[i]);
+						System.out.println();
 					}
-					System.out.println();
-			    	t = fileScan.get_next();
+					else
+						System.out.println("no records match specified condition");
+					
+					while( t != null)
+					{
+						for(int i = 0; i < columnsTypes.length; ++i)
+						{
+							if(columnsTypes[i].attrType == AttrType.attrInteger)
+								System.out.printf("%d ", t.getIntFld(i+1));
+							else if(columnsTypes[i].attrType == AttrType.attrString)
+								System.out.printf("%s ", t.getStrFld(i+1));
+							else if(columnsTypes[i].attrType == AttrType.attrReal)
+								System.out.printf("%.2f ", t.getFloFld(i+1));
+						}
+						System.out.println();
+				    	t = sorter.get_next();
+					}
 				}
-				fileScan.close();
+				finally {
+					if (fileScan != null)
+						fileScan.close();
+					if (sorter != null)
+						sorter.close();
+				}
 				System.out.println();
 			}
-			// col query
+			// col query TODO: add sorting on column
 			else if(columnPage != null)
 			{
-				ColumnarFileScan columnarFileScan = new ColumnarFileScan(
-						columnTableName, 
-						columnsTypes, 
-						stringsSizes, 
-						Sprojection, 
-						outFilter);
-				
-				// read and print all tuples in record set
-				Tuple t = columnarFileScan.get_next();
-				if(t!= null) {
-					for(int i = 0; i < columnsTypes.length; ++i)
-						System.out.printf("%s ", columnsNames[i]);
-					System.out.println();
-				}
-				else
-					System.out.println("no records match specified condition");
-				
-				while( t != null)
-				{
-					for(int i = 0; i < columnsTypes.length; ++i)
-					{
-						if(columnsTypes[i].attrType == AttrType.attrInteger)
-							System.out.printf("%d ", t.getIntFld(i+1));
-						else if(columnsTypes[i].attrType == AttrType.attrString)
-							System.out.printf("%s ", t.getStrFld(i+1));
-						else if(columnsTypes[i].attrType == AttrType.attrReal)
-							System.out.printf("%.2f ", t.getFloFld(i+1));
+				ColumnarFileScan columnarFileScan = null;
+				Sort sorter = null;
+				try { 
+					columnarFileScan = new ColumnarFileScan(
+							columnTableName, 
+							columnsTypes, 
+							stringsSizes, 
+							Sprojection, 
+							null);
+	
+					sorter = new Sort(columnsTypes, 
+							(short) columnsTypes.length, 
+							stringsSizes, 
+							columnarFileScan, 
+							columnIndex + 1, 
+							new TupleOrder(TupleOrder.Ascending), 
+							sortFldLen, buffer_pages);
+					
+					// read and print all tuples in record set
+					Tuple t = sorter.get_next();
+					if(t!= null) {
+						for(int i = 0; i < columnsTypes.length; ++i)
+							System.out.printf("%s ", columnsNames[i]);
+						System.out.println();
 					}
-					System.out.println();
-			    	t = columnarFileScan.get_next();
+					else
+						System.out.println("no records match specified condition");
+					
+					while( t != null)
+					{
+						for(int i = 0; i < columnsTypes.length; ++i)
+						{
+							if(columnsTypes[i].attrType == AttrType.attrInteger)
+								System.out.printf("%d ", t.getIntFld(i+1));
+							else if(columnsTypes[i].attrType == AttrType.attrString)
+								System.out.printf("%s ", t.getStrFld(i+1));
+							else if(columnsTypes[i].attrType == AttrType.attrReal)
+								System.out.printf("%.2f ", t.getFloFld(i+1));
+						}
+						System.out.println();
+				    	t = sorter.get_next();
+					}
 				}
-				columnarFileScan.close();
+				finally {
+					if (columnarFileScan != null)
+						columnarFileScan.close();
+					if (sorter != null)
+						sorter.close();
+				}
 				System.out.println();
 			}
 			
