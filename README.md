@@ -19,7 +19,7 @@ You can create a database with the following commands
 ``` bash
 cd src
 make
-java tools.batchinsert [input file] [db name] [column|row] [num columns]
+java tools.batchinsert [input file] [db name] [column|row] [table name] [num columns]
 ```
 **Note** The number of columns need to match the input file
 
@@ -28,7 +28,7 @@ You can query a database with the following commands
 ``` bash
 cd src
 make
-java tools.query [db name] [attribute] "[operator]" [value] [buffer size]
+java tools.query [db name] [table name] [attribute] "[operator]" [value] [buffer size]
 ```
 **NOTE**: operators must be wrapped in quotes
 
