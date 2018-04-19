@@ -4,279 +4,154 @@ import heap.*;
 import global.*;
 import iterator.*;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Arrays;
+
+import bufmgr.BufMgrException;
+import bufmgr.HashOperationException;
+import bufmgr.PageNotFoundException;
+import bufmgr.PagePinnedException;
+import bufmgr.PageUnpinnedException;
+import diskmgr.DB;
 
 /**
- * The query program performs query on existing row/column-oriented database relations and displays results based on specified conditions.
- *  
+ * The qNLJ program performs a nested loop join on two relations
+ * 
  * 
  * @author shane
  * 
  */
 public class qNLJ {
 
-	// Auxiliary function that does string to AttrType mapping
-	static AttrType StringToAttrType(String str)
-	{
-		str = str.toLowerCase();
-		if(str.equals("int"))
-			return new AttrType(AttrType.attrInteger);
-		else if(str.equals("float"))
-			return new AttrType(AttrType.attrReal);
-		else
-			return new AttrType(AttrType.attrString);
-	}
-	
-	// Auxiliary function that does string to AttrOperator mapping
-	static AttrOperator StringToAttrOperator(String op)
-	{
-		if(op.equals("="))
-			return new AttrOperator(AttrOperator.aopEQ);
-		else if(op.equals("!="))
-			return new AttrOperator(AttrOperator.aopNE);
-		else if(op.equals("<"))
-			return new AttrOperator(AttrOperator.aopLT);
-		else if(op.equals("<="))
-			return new AttrOperator(AttrOperator.aopLE);
-		else if(op.equals(">"))
-			return new AttrOperator(AttrOperator.aopGT);
-		else if(op.equals(">="))
-			return new AttrOperator(AttrOperator.aopGE);
-		
-		return null;
-	}
-	
-	// Auxiliary function to get the index associated with column's name
-	static int GetAttrType(String[] columnNames, String column)
-	{
-		for(int i = 0; i < columnNames.length; ++i)
-		{
-			if(columnNames[i].equals(column))
-				return i;
-		}
-		return -1;
-	}
-	
-	public static void main(String[] args) {
-		final String usage = "\tUsage: query DBNAME VALUECONSTRAINT NUMBUF\n";
-		
+	static final String usage = "\tUsage: qNLJ DBNAME TABLENAME1 COLUMNNAME1 TABLENAME2 COLUMNNAME2 NUMBUF";
+
+	public static void main(String[] args) throws HashOperationException, PageUnpinnedException, PagePinnedException,
+			PageNotFoundException, BufMgrException, IOException {
+
 		// validate arguments
-		if(args.length != 5) {
+		if (args.length != 6) {
 			System.out.println(usage);
 			System.exit(1);
 		}
-		
-		final int STRING_COLUMN_SIZE = 30;				// fixed-size string fields
-		String rowTableName = "table_1_row";
-		String columnTableName = "table_1_column";
-		String headerTableName = new String();
-		String headerString = new String();
-		String db_name = args[0];
-		String column_name = args[1];
-		String operator = args[2];
-		String value = args[3];
+
+		String databaseName = args[0];
+
+		String tableNameA = args[1];
+		String columnNameA = args[2];
+		String tableNameB = args[3];
+		String columnNameB = args[4];
+
+		int numStringColumns = 0;
 		int num_buffers = 0;
 		try {
-			num_buffers = Integer.parseInt(args[4]); 			// memory buffer pool size
-		} catch(NumberFormatException e) {
-			System.out.println("invalid NUMBUF input\n" + usage);
+			num_buffers = Integer.parseInt(args[5]); // memory buffer pool size
+		} catch (NumberFormatException e) {
+			System.out.println("invalid NUMBUF input");
+			System.out.println(usage);
 			System.exit(1);
 		}
-		
-		int numStringColumns = 0;
-		
-		AttrType[] columnsTypes;
-		String[] columnsNames;
-		String pairs_delims = " ";
-		String types_delims = ":";
-		
-		SystemDefs sysdef = null;
-		// check whether the db already exists
-		File db_file = new File(db_name);
-		if(db_file.exists()) {	// file found
-			System.out.printf("An existing database (%s) was found, opening database with %d buffers.\n", db_name, num_buffers);
-			// open database with 100 buffers
-			sysdef = new SystemDefs(db_name,0,num_buffers,"Clock");
-		}else
-		{
-			System.out.println("Database not found, exiting.\n" + usage);
+
+		// check whether or not the database already exists
+		if (Files.notExists(Paths.get(databaseName))) {
+			System.out.println("Database '" + databaseName + "' not found, exiting.");
+			System.out.println(usage);
 			System.exit(1);
 		}
-		
+
+		// open database
+		System.out.println("Database '" + databaseName + "' found, opening with " + num_buffers + " buffers.\n");
+		SystemDefs sysdef = new SystemDefs(databaseName, 0, num_buffers, "Clock");
+
 		try {
-			PageId rowPage = sysdef.JavabaseDB.get_file_entry(rowTableName);
-			PageId columnPage = sysdef.JavabaseDB.get_file_entry(columnTableName+".hdr");
-			
-			// check table type (row or column)
-			if(rowPage != null)
-			{				
-				headerTableName = rowTableName + "_type";
-			}
-			else if(columnPage != null)
-			{
-				headerTableName = columnTableName + "_type";
-			}
-			
-			// read table's header info
-			Heapfile headerFile = new Heapfile(headerTableName);
-			Tuple headerTuple = new Tuple();
-			short[] sSizes = new short[1];
-			sSizes[0] = 900;
-			AttrType[] types = new AttrType[1];
-			types[0] = new AttrType(AttrType.attrString);
-			RID rid = new RID();
-			Scan s = headerFile.openScan();
-			headerTuple = s.getNext(rid);
-			if(headerTuple == null) {
-				System.out.println("Attributes types table not found.\n");
-				System.exit(1);
-			}
-			headerTuple.setHdr((short)1, types, sSizes);
-			headerString = headerTuple.getStrFld(1);
-			
-			String[] pairs = headerString.split(pairs_delims);
-			columnsNames = new String[pairs.length];
-			columnsTypes = new AttrType[pairs.length];
-			for(int i = 0; i < pairs.length; ++i)
-			{
-				String[] name_type = pairs[i].split(types_delims);
-				columnsNames[i] = name_type[0].toLowerCase();
-				columnsTypes[i] = StringToAttrType(name_type[1]);
-			}
-			
-			// count number of string columns
-			for(int i = 0; i < columnsTypes.length; ++i)
-				if(columnsTypes[i].attrType == AttrType.attrString)
-					++numStringColumns;
-			
-			short[] stringsSizes = null;
-			if(numStringColumns > 0) {
-				stringsSizes = new short[numStringColumns];
-				for(int i = 0; i < stringsSizes.length; ++i)
-					stringsSizes[i] = STRING_COLUMN_SIZE;
-			}
-			
-			// preparing query condition
-			//NOTE: CondExpr array has to contain an extra (null) element otherwise PredEval.Eval would throw an exception 
-			int columnIndex = GetAttrType(columnsNames, column_name);
-			CondExpr[] outFilter = new CondExpr[2];
-			outFilter[0] = new CondExpr();
-			outFilter[0].op    = StringToAttrOperator(operator);
-			outFilter[0].next  = null;
-			outFilter[0].type1 = new AttrType(AttrType.attrSymbol);
-			outFilter[0].type2 = columnsTypes[columnIndex];
-			outFilter[0].operand1.symbol = new FldSpec (new RelSpec(RelSpec.outer),columnIndex+1);
-			//outFilter[0].operand2.integer = 990;
-			if(columnsTypes[columnIndex].attrType == AttrType.attrInteger)
-				outFilter[0].operand2.integer = Integer.parseInt(value);
-			else if(columnsTypes[columnIndex].attrType == AttrType.attrString)
-				outFilter[0].operand2.string = value;
-			else if(columnsTypes[columnIndex].attrType == AttrType.attrReal)
-				outFilter[0].operand2.real = Float.parseFloat(value);
-			
-			// projection list
-			FldSpec [] Sprojection = new FldSpec[columnsTypes.length];
-			for(int i = 0; i < columnsTypes.length; ++i)
-			    Sprojection[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1);
-			
+			// gather header information
+			Header hdrA = new Header(tableNameA, false);
+			Header hdrB = new Header(tableNameB, true);
+
 			// profiling
 			long start = System.nanoTime();
-			
-			// row query
-			if(rowPage != null)
-			{
-				FileScan fileScan = new FileScan(
-						rowTableName, 
-						columnsTypes,
-						stringsSizes,
-						(short) columnsTypes.length, 
-						(short) columnsTypes.length,
-						Sprojection, 
-						outFilter);
-				
-				// read and print all tuples in record set
-				Tuple t = fileScan.get_next();
-				if(t!= null) {
-					for(int i = 0; i < columnsTypes.length; ++i)
-						System.out.printf("%s ", columnsNames[i]);
-					System.out.println();
-				}
-				else
-					System.out.println("no records match specified condition");
-				
-				while( t != null)
-				{
-					for(int i = 0; i < columnsTypes.length; ++i)
-					{
-						if(columnsTypes[i].attrType == AttrType.attrInteger)
-							System.out.printf("%d ", t.getIntFld(i+1));
-						else if(columnsTypes[i].attrType == AttrType.attrString)
-							System.out.printf("%s ", t.getStrFld(i+1));
-						else if(columnsTypes[i].attrType == AttrType.attrReal)
-							System.out.printf("%.2f ", t.getFloFld(i+1));
-					}
-					System.out.println();
-			    	t = fileScan.get_next();
-				}
-				fileScan.close();
-				System.out.println();
-			}
-			// col query
-			else if(columnPage != null)
-			{
-				ColumnarFileScan columnarFileScan = new ColumnarFileScan(
-						columnTableName, 
-						columnsTypes, 
-						stringsSizes, 
-						Sprojection, 
-						outFilter);
-				
-				// read and print all tuples in record set
-				Tuple t = columnarFileScan.get_next();
-				if(t!= null) {
-					for(int i = 0; i < columnsTypes.length; ++i)
-						System.out.printf("%s ", columnsNames[i]);
-					System.out.println();
-				}
-				else
-					System.out.println("no records match specified condition");
-				
-				while( t != null)
-				{
-					for(int i = 0; i < columnsTypes.length; ++i)
-					{
-						if(columnsTypes[i].attrType == AttrType.attrInteger)
-							System.out.printf("%d ", t.getIntFld(i+1));
-						else if(columnsTypes[i].attrType == AttrType.attrString)
-							System.out.printf("%s ", t.getStrFld(i+1));
-						else if(columnsTypes[i].attrType == AttrType.attrReal)
-							System.out.printf("%.2f ", t.getFloFld(i+1));
-					}
-					System.out.println();
-			    	t = columnarFileScan.get_next();
-				}
-				columnarFileScan.close();
-				System.out.println();
-			}
-			
-			long end = System.nanoTime();
-			long duration = (end - start)/1000000;	// in milliseconds
-			
-			System.out.printf("elapsed time: %d ms\n", duration);
-			
-		} catch (Exception e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-		}
-		
-		try {
-			sysdef.JavabaseBM.flushAllPages();
-			sysdef.JavabaseDB.closeDB();
-		}catch(Exception e) {/*empty*/}
-		
-		// print page I/O info
-		System.out.printf("total page reads: %d\ttotal page writes: %d\n", 
-				sysdef.JavabaseDB.GetNumberOfPageReads(),
-				sysdef.JavabaseDB.GetNumberOfPageWrites());
-	}
 
+			// Nested Loop Join
+			Iterator scannerA = null;
+			Iterator nlj = null;
+			FldSpec[] select;
+			int numPages = 30;
+			int numFields;
+			try {
+				if (!hdrA.columnar)
+					scannerA = new FileScan(hdrA.tableName, hdrA.types, hdrA.strSizes, (short) hdrA.types.length,
+							(short) hdrA.types.length, hdrA.select, null);
+				else
+					scannerA = new ColumnarFileScan(hdrA.tableName, hdrA.types, hdrA.strSizes, hdrA.select, null);
+
+				select = concat(hdrA.select, hdrB.select);
+				
+				CondExpr[] join = new CondExpr[1];
+				join[0] = new CondExpr();
+				join[0].next  = null;
+				join[0].op    = new AttrOperator(AttrOperator.aopEQ);
+				join[0].type1 = new AttrType(AttrType.attrSymbol);
+				join[0].type2 = new AttrType(AttrType.attrSymbol);
+				join[0].operand1.symbol = hdrA.select[hdrA.indexOf(columnNameA)];
+				join[0].operand2.symbol = hdrB.select[hdrB.indexOf(columnNameB)];
+				
+				nlj = new NestedLoopsJoins(hdrA.types, hdrA.types.length, hdrA.strSizes, hdrB.types, hdrB.types.length, hdrB.strSizes,
+						numPages, scannerA, hdrB.tableName, join, null, select, select.length);
+
+				Tuple t = nlj.get_next();
+				if (t == null) {
+					System.out.println("no records match specified condition");
+					System.exit(0);
+				}
+
+				// print header
+				System.out.println(String.join(" ", hdrA.columns));
+
+				// print data
+				while (t != null) {
+					for (int i = 0; i < hdrA.types.length; i++) {
+						StringBuilder builder = new StringBuilder();
+						switch (hdrA.types[i].attrType) {
+						case AttrType.attrInteger:
+							builder.append(t.getIntFld(i + 1));
+						case AttrType.attrReal:
+							builder.append(String.format("%.2f ", t.getFloFld(i + 1)));
+						case AttrType.attrString:
+							builder.append(t.getStrFld(i + 1));
+						}
+						System.out.println(builder.toString());
+					}
+					t = nlj.get_next();
+				}
+
+			} finally {
+				if (scannerA != null)
+					scannerA.close();
+				if (nlj != null)
+					nlj.close();
+			}
+
+			long end = System.nanoTime();
+			long duration = (end - start) / 1000000; // in milliseconds
+
+			System.out.printf("elapsed time: %d ms\n", duration);
+
+		} catch (Exception e1) {
+			e1.printStackTrace();
+		} finally {
+			SystemDefs.JavabaseBM.flushAllPages();
+			SystemDefs.JavabaseDB.closeDB();
+		}
+
+		// print page I/O info
+		System.out.println(String.format("total page reads: %d", DB.GetNumberOfPageReads()));
+		System.out.println(String.format("total page writes: %d\n", DB.GetNumberOfPageWrites()));
+	}
+	
+	public static <T> T[] concat(T[] first, T[] second) {
+		  T[] result = Arrays.copyOf(first, first.length + second.length);
+		  System.arraycopy(second, 0, result, first.length, second.length);
+		  return result;
+		}
 }
