@@ -3,7 +3,6 @@ package tools;
 import heap.*;
 import global.*;
 import iterator.*;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -43,7 +42,6 @@ public class qNLJ {
 		String tableNameB = args[3];
 		String columnNameB = args[4];
 
-		int numStringColumns = 0;
 		int num_buffers = 0;
 		try {
 			num_buffers = Integer.parseInt(args[5]); // memory buffer pool size
@@ -62,12 +60,15 @@ public class qNLJ {
 
 		// open database
 		System.out.println("Database '" + databaseName + "' found, opening with " + num_buffers + " buffers.\n");
-		SystemDefs sysdef = new SystemDefs(databaseName, 0, num_buffers, "Clock");
+		new SystemDefs(databaseName, 0, num_buffers, "Clock");
 
 		try {
 			// gather header information
 			Header hdrA = new Header(tableNameA, false);
 			Header hdrB = new Header(tableNameB, true);
+			
+			System.out.println(hdrA.toString());
+			System.out.println(hdrB.toString());
 
 			// profiling
 			long start = System.nanoTime();
@@ -75,9 +76,10 @@ public class qNLJ {
 			// Nested Loop Join
 			Iterator scannerA = null;
 			Iterator nlj = null;
+			String[] columns;
 			FldSpec[] select;
-			int numPages = 30;
-			int numFields;
+			AttrType[] types;
+			int numPages = 10;
 			try {
 				if (!hdrA.columnar)
 					scannerA = new FileScan(hdrA.tableName, hdrA.types, hdrA.strSizes, (short) hdrA.types.length,
@@ -85,19 +87,24 @@ public class qNLJ {
 				else
 					scannerA = new ColumnarFileScan(hdrA.tableName, hdrA.types, hdrA.strSizes, hdrA.select, null);
 
+				columns = concat(hdrA.columns, hdrB.columns);
 				select = concat(hdrA.select, hdrB.select);
+				types = concat(hdrA.types, hdrB.types);
 				
-				CondExpr[] join = new CondExpr[1];
+				CondExpr[] join = new CondExpr[2];
 				join[0] = new CondExpr();
 				join[0].next  = null;
-				join[0].op    = new AttrOperator(AttrOperator.aopEQ);
+				join[0].op    = new AttrOperator(AttrOperator.aopEQ); // =
 				join[0].type1 = new AttrType(AttrType.attrSymbol);
 				join[0].type2 = new AttrType(AttrType.attrSymbol);
 				join[0].operand1.symbol = hdrA.select[hdrA.indexOf(columnNameA)];
 				join[0].operand2.symbol = hdrB.select[hdrB.indexOf(columnNameB)];
+				join[1] = null;
 				
-				nlj = new NestedLoopsJoins(hdrA.types, hdrA.types.length, hdrA.strSizes, hdrB.types, hdrB.types.length, hdrB.strSizes,
-						numPages, scannerA, hdrB.tableName, join, null, select, select.length);
+				nlj = new NestedLoopsJoins(hdrA.types, hdrA.types.length, hdrA.strSizes, 
+										   hdrB.types, hdrB.types.length, hdrB.strSizes,
+						                   numPages, scannerA, hdrB.tableName, 
+						                   join, null, select, select.length);
 
 				Tuple t = nlj.get_next();
 				if (t == null) {
@@ -106,22 +113,11 @@ public class qNLJ {
 				}
 
 				// print header
-				System.out.println(String.join(" ", hdrA.columns));
+				System.out.println(String.join(" ", columns));
 
 				// print data
 				while (t != null) {
-					for (int i = 0; i < hdrA.types.length; i++) {
-						StringBuilder builder = new StringBuilder();
-						switch (hdrA.types[i].attrType) {
-						case AttrType.attrInteger:
-							builder.append(t.getIntFld(i + 1));
-						case AttrType.attrReal:
-							builder.append(String.format("%.2f ", t.getFloFld(i + 1)));
-						case AttrType.attrString:
-							builder.append(t.getStrFld(i + 1));
-						}
-						System.out.println(builder.toString());
-					}
+					t.print(types);
 					t = nlj.get_next();
 				}
 

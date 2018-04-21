@@ -1,5 +1,7 @@
 package tools;
 
+import java.util.Arrays;
+
 import global.AttrType;
 import global.PageId;
 import global.RID;
@@ -25,17 +27,17 @@ public class Header {
 	public Header(String table, boolean inner) throws Exception {
 		// check if header or column version exists
 		PageId pageRow = SystemDefs.JavabaseDB.get_file_entry(table + "_row");
-		PageId pageCol = SystemDefs.JavabaseDB.get_file_entry(table + "_col.hdr");
-		if (pageRow == null) // not a row stored tabled
+		PageId pageCol = SystemDefs.JavabaseDB.get_file_entry(table + "_column.hdr");
+		if (pageRow != null) // not a row stored tabled
 		{
 			tableName = table + "_row";
 			columnar = false;
 
 		} else if (pageCol != null) {
-			tableName = table + "_col.hdr";
+			tableName = table + "_column";
 			columnar = true;
 		} else {
-			throw new Exception();
+			throw new Exception("Attribute Table not found");
 		}
 
 		// get header info
@@ -46,7 +48,7 @@ public class Header {
 			hScan = headerFile.openScan();
 			Tuple t = hScan.getNext(new RID());
 			if (t == null) {
-				System.out.println("Attributes types table not found.\n");
+				System.out.println("Attributes types table " + tableName + "_type not found.\n");
 				System.exit(1);
 			}
 			t.setHdr((short) 1, new AttrType[] { new AttrType(AttrType.attrString) }, new short[] { 900 });
@@ -98,5 +100,22 @@ public class Header {
 				return i;
 		}
 		return -1;
+	}
+	
+	public @Override String toString() {
+		String[] types_arr = Arrays.stream(types).map((x) -> x.toString()).toArray(String[]::new);
+		String[] specs_arr = Arrays.stream(select).map((x) -> x.offset + "," + x.relation.key).toArray(String[]::new);
+		StringBuilder sizes = new StringBuilder();
+		for (int i = 0; i < strSizes.length; i++)
+			sizes.append(strSizes[i]).append(" ");
+		StringBuilder allSizes = new StringBuilder();
+		for (int i = 0; i < fldSizes.length; i++)
+			allSizes.append(fldSizes[i]).append(" ");
+		return String.join(" ", columns)  + "\n"
+				+ String.join(" ", types_arr) + "\n"
+				+ String.join(" ", specs_arr) + "\n"
+				+ sizes.toString() + "\n"
+				+ allSizes.toString() + "\n"
+				+ columnar + "\n";
 	}
 }
