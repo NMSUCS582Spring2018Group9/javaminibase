@@ -13,6 +13,7 @@ import bufmgr.HashOperationException;
 import bufmgr.PageNotFoundException;
 import bufmgr.PagePinnedException;
 import bufmgr.PageUnpinnedException;
+import columnar.ColumnarNestedLoopJoins;
 import diskmgr.DB;
 
 /**
@@ -66,7 +67,7 @@ public class qNLJ {
 			// gather header information
 			Header hdrA = new Header(tableNameA, false);
 			Header hdrB = new Header(tableNameB, true);
-			
+
 			System.out.println(hdrA.toString());
 			System.out.println(hdrB.toString());
 
@@ -90,21 +91,24 @@ public class qNLJ {
 				columns = concat(hdrA.columns, hdrB.columns);
 				select = concat(hdrA.select, hdrB.select);
 				types = concat(hdrA.types, hdrB.types);
-				
+
 				CondExpr[] join = new CondExpr[2];
 				join[0] = new CondExpr();
-				join[0].next  = null;
-				join[0].op    = new AttrOperator(AttrOperator.aopEQ); // =
+				join[0].next = null;
+				join[0].op = new AttrOperator(AttrOperator.aopEQ); // =
 				join[0].type1 = new AttrType(AttrType.attrSymbol);
 				join[0].type2 = new AttrType(AttrType.attrSymbol);
 				join[0].operand1.symbol = hdrA.select[hdrA.indexOf(columnNameA)];
 				join[0].operand2.symbol = hdrB.select[hdrB.indexOf(columnNameB)];
 				join[1] = null;
-				
-				nlj = new NestedLoopsJoins(hdrA.types, hdrA.types.length, hdrA.strSizes, 
-										   hdrB.types, hdrB.types.length, hdrB.strSizes,
-						                   numPages, scannerA, hdrB.tableName, 
-						                   join, null, select, select.length);
+
+				if (!hdrB.columnar)
+					nlj = new NestedLoopsJoins(hdrA.types, hdrA.types.length, hdrA.strSizes, hdrB.types,
+							hdrB.types.length, hdrB.strSizes, numPages, scannerA, hdrB.tableName, join, null, select,
+							select.length);
+				else
+					nlj = new ColumnarNestedLoopJoins(hdrA.types, hdrA.strSizes, hdrB.types, hdrB.strSizes, scannerA,
+							hdrB.tableName, join, null, select);
 
 				Tuple t = nlj.get_next();
 				if (t == null) {
@@ -144,10 +148,10 @@ public class qNLJ {
 		System.out.println(String.format("total page reads: %d", DB.GetNumberOfPageReads()));
 		System.out.println(String.format("total page writes: %d\n", DB.GetNumberOfPageWrites()));
 	}
-	
+
 	public static <T> T[] concat(T[] first, T[] second) {
-		  T[] result = Arrays.copyOf(first, first.length + second.length);
-		  System.arraycopy(second, 0, result, first.length, second.length);
-		  return result;
-		}
+		T[] result = Arrays.copyOf(first, first.length + second.length);
+		System.arraycopy(second, 0, result, first.length, second.length);
+		return result;
+	}
 }

@@ -1,251 +1,200 @@
 package columnar;
 
 import java.io.IOException;
+import java.util.Arrays;
 
-import bufmgr.PageNotReadException;
-import global.AttrType;
-import global.RID;
-import heap.Heapfile;
-import heap.InvalidTupleSizeException;
-import heap.InvalidTypeException;
-import heap.Scan;
-import heap.Tuple;
-import index.IndexException;
-import iterator.CondExpr;
-import iterator.FldSpec;
-import iterator.Iterator;
-import iterator.JoinsException;
-import iterator.LowMemException;
-import iterator.NestedLoopException;
-import iterator.PredEval;
-import iterator.PredEvalException;
-import iterator.Projection;
-import iterator.SortException;
-import iterator.TupleUtils;
-import iterator.TupleUtilsException;
-import iterator.UnknowAttrType;
-import iterator.UnknownKeyTypeException;
+import bufmgr.*;
+import global.*;
+import heap.*;
+import index.*;
+import iterator.*;
 
-public class ColumnarNestedLoopJoins extends Iterator
-{
-	  private AttrType      _in1[],  _in2[];
-	  private   int        in1_len, in2_len;
-	  private   Iterator  outer;
-	  private   short t2_str_sizescopy[];
-	  private   CondExpr OutputFilter[];
-	  private   CondExpr RightFilter[];
-	  private   int        n_buf_pgs;        // # of buffer pages available.
-	  private   boolean        done,         // Is the join complete
-	    get_from_outer;                 // if TRUE, a tuple is got from outer
-	  private   Tuple     outer_tuple, inner_tuple;
-	  private   Tuple     Jtuple;           // Joined tuple
-	  private   FldSpec   perm_mat[];
-	  private   int        nOutFlds;
-	  private   Heapfile  hf;
-	  private   Scan      inner;
-	  
-	  
-	  /**constructor
-	   *Initialize the two relations which are joined, including relation type,
-	   *@param in1  Array containing field types of R.
-	   *@param len_in1  # of columns in R.
-	   *@param t1_str_sizes shows the length of the string fields.
-	   *@param in2  Array containing field types of S
-	   *@param len_in2  # of columns in S
-	   *@param  t2_str_sizes shows the length of the string fields.
-	   *@param amt_of_mem  IN PAGES
-	   *@param am1  access method for left i/p to join
-	   *@param relationName  access hfapfile for right i/p to join
-	   *@param outFilter   select expressions
-	   *@param rightFilter reference to filter applied on right i/p
-	   *@param proj_list shows what input fields go where in the output tuple
-	   *@param n_out_flds number of outer relation fileds
-	   *@exception IOException some I/O fault
-	   *@exception NestedLoopException exception from this class
-	   */
-	  public ColumnarNestedLoopJoins( AttrType    in1[],    
-				   int     len_in1,           
-				   short   t1_str_sizes[],
-				   AttrType    in2[],         
-				   int     len_in2,           
-				   short   t2_str_sizes[],   
-				   int     amt_of_mem,        
-				   Iterator     am1,          
-				   String relationName,      
-				   CondExpr outFilter[],      
-				   CondExpr rightFilter[],    
-				   FldSpec   proj_list[],
-				   int        n_out_flds
-				   ) throws IOException,NestedLoopException
-	    {
-	      
-	      _in1 = new AttrType[in1.length];
-	      _in2 = new AttrType[in2.length];
-	      System.arraycopy(in1,0,_in1,0,in1.length);
-	      System.arraycopy(in2,0,_in2,0,in2.length);
-	      in1_len = len_in1;
-	      in2_len = len_in2;
-	      
-	      
-	      outer = am1;
-	      t2_str_sizescopy =  t2_str_sizes;
-	      inner_tuple = new Tuple();
-	      Jtuple = new Tuple();
-	      OutputFilter = outFilter;
-	      RightFilter  = rightFilter;
-	      
-	      n_buf_pgs    = amt_of_mem;
-	      inner = null;
-	      done  = false;
-	      get_from_outer = true;
-	      
-	      AttrType[] Jtypes = new AttrType[n_out_flds];
-	      short[]    t_size;
-	      
-	      perm_mat = proj_list;
-	      nOutFlds = n_out_flds;
-	      try {
-		t_size = TupleUtils.setup_op_tuple(Jtuple, Jtypes,
-						   in1, len_in1, in2, len_in2,
-						   t1_str_sizes, t2_str_sizes,
-						   proj_list, nOutFlds);
-	      }catch (TupleUtilsException e){
-		throw new NestedLoopException(e,"TupleUtilsException is caught by NestedLoopsJoins.java");
-	      }
-	      
-	      
-	      
-	      try {
-		  hf = new Heapfile(relationName);
-		  
-	      }
-	      catch(Exception e) {
-		throw new NestedLoopException(e, "Create new heapfile failed.");
-	      }
-	    }
-	  
-	  /**  
-	   *@return The joined tuple is returned
-	   *@exception IOException I/O errors
-	   *@exception JoinsException some join exception
-	   *@exception IndexException exception from super class
-	   *@exception InvalidTupleSizeException invalid tuple size
-	   *@exception InvalidTypeException tuple type not valid
-	   *@exception PageNotReadException exception from lower layer
-	   *@exception TupleUtilsException exception from using tuple utilities
-	   *@exception PredEvalException exception from PredEval class
-	   *@exception SortException sort exception
-	   *@exception LowMemException memory error
-	   *@exception UnknowAttrType attribute type unknown
-	   *@exception UnknownKeyTypeException key type unknown
-	   *@exception Exception other exceptions
+public class ColumnarNestedLoopJoins extends Iterator {
+	private AttrType outerTypes[];
+	private AttrType innerTypes[];
+	private short innerStrSizes[];
+	private CondExpr outputFilter[];
+	private CondExpr rightFilter[];
+	private FldSpec projection[];
 
-	   */
-	  public Tuple get_next()
-	    throws IOException,
-		   JoinsException ,
-		   IndexException,
-		   InvalidTupleSizeException,
-		   InvalidTypeException, 
-		   PageNotReadException,
-		   TupleUtilsException, 
-		   PredEvalException,
-		   SortException,
-		   LowMemException,
-		   UnknowAttrType,
-		   UnknownKeyTypeException,
-		   Exception
-	    {
-	      // This is a DUMBEST form of a join, not making use of any key information...
-	      
-	      
-	      if (done)
-		return null;
-	      
-	      do
-		{
-		  // If get_from_outer is true, Get a tuple from the outer, delete
-		  // an existing scan on the file, and reopen a new scan on the file.
-		  // If a get_next on the outer returns DONE?, then the nested loops
-		  //join is done too.
-		  
-		  if (get_from_outer == true)
-		    {
-		      get_from_outer = false;
-		      if (inner != null)     // If this not the first time,
-			{
-			  // close scan
-			  inner = null;
-			}
-		    
-		      try {
-			inner = hf.openScan();
-		      }
-		      catch(Exception e){
-			throw new NestedLoopException(e, "openScan failed");
-		      }
-		      
-		      if ((outer_tuple=outer.get_next()) == null)
-			{
-			  done = true;
-			  if (inner != null) 
-			    {
-	                      
-			      inner = null;
-			    }
-			  
-			  return null;
-			}   
-		    }  // ENDS: if (get_from_outer == TRUE)
-		 
-		  
-		  // The next step is to get a tuple from the inner,
-		  // while the inner is not completely scanned && there
-		  // is no match (with pred),get a tuple from the inner.
-		  
-		 
-		      RID rid = new RID();
-		      while ((inner_tuple = inner.getNext(rid)) != null)
-			{
-			  inner_tuple.setHdr((short)in2_len, _in2,t2_str_sizescopy);
-			  if (PredEval.Eval(RightFilter, inner_tuple, null, _in2, null) == true)
-			    {
-			      if (PredEval.Eval(OutputFilter, outer_tuple, inner_tuple, _in1, _in2) == true)
-				{
-				  // Apply a projection on the outer and inner tuples.
-				  Projection.Join(outer_tuple, _in1, 
-						  inner_tuple, _in2, 
-						  Jtuple, perm_mat, nOutFlds);
-				  return Jtuple;
-				}
-			    }
-			}
-		      
-		      // There has been no match. (otherwise, we would have 
-		      //returned from t//he while loop. Hence, inner is 
-		      //exhausted, => set get_from_outer = TRUE, go to top of loop
-		      
-		      get_from_outer = true; // Loop back to top and get next outer tuple.	      
-		} while (true);
-	    } 
-	 
-	  /**
-	   * implement the abstract method close() from super class Iterator
-	   *to finish cleaning up
-	   *@exception IOException I/O error from lower layers
-	   *@exception JoinsException join error from lower layers
-	   *@exception IndexException index access error 
-	   */
-	  public void close() throws JoinsException, IOException,IndexException 
-	    {
-	      if (!closeFlag) {
-		
+	private Columnarfile columnarFile;
+
+	private TupleScan inner;
+	private Iterator outer;
+
+	private boolean isComplete = false; // is the join complete
+	private Tuple joinTuple = new Tuple(); // joined tuple
+
+	/**
+	 * constructor Initialize the two relations which are joined, including relation
+	 * type,
+	 * 
+	 * @param innerTypes
+	 *            Array containing field types of R.
+	 * @param innerStrSizes
+	 *            shows the length of the string fields.
+	 * @param outerTypes
+	 *            Array containing field types of S
+	 * @param outerStrSizes
+	 *            shows the length of the string fields.
+	 * @param outerIterator
+	 *            access method for left i/p to join
+	 * @param relationName
+	 *            access Columnar File for right i/p to join
+	 * @param outputFilter
+	 *            select expressions
+	 * @param rightFilter
+	 *            reference to filter applied on right i/p
+	 * @param projection
+	 *            shows what input fields go where in the output tuple
+	 * @exception IOException
+	 *                some I/O fault
+	 * @exception NestedLoopException
+	 *                exception from this class
+	 */
+	public ColumnarNestedLoopJoins(AttrType innerTypes[], short innerStrSizes[], AttrType outerTypes[],
+			short outerStrSizes[], Iterator outerIterator, String relationName, CondExpr outputFilter[],
+			CondExpr rightFilter[], FldSpec projection[]) throws IOException, NestedLoopException {
+
+		this.outer = outerIterator;
+		this.outerTypes = Arrays.copyOf(outerTypes, outerTypes.length);
+
+		this.innerTypes = Arrays.copyOf(innerTypes, outerTypes.length);
+		this.innerStrSizes = outerStrSizes;
+
+		this.outputFilter = outputFilter;
+		this.rightFilter = rightFilter;
+
+		this.projection = projection;
+
 		try {
-		  outer.close();
-		}catch (Exception e) {
-		  throw new JoinsException(e, "NestedLoopsJoin.java: error in closing iterator.");
+			TupleUtils.setup_op_tuple(joinTuple, new AttrType[projection.length], outerTypes, outerTypes.length,
+					innerTypes, innerTypes.length, innerStrSizes, outerStrSizes, projection, projection.length);
+		} catch (TupleUtilsException e) {
+			throw new NestedLoopException(e, "TupleUtilsException is caught by ColumnarNestedLoopJoins.java");
 		}
-		closeFlag = true;
-	      }
-	    }
+
+		try {
+			columnarFile = new Columnarfile(relationName, innerTypes.length, innerTypes, outerStrSizes);
+		} catch (Exception e) {
+			throw new NestedLoopException(e, "Create new heapfile failed.");
+		}
 	}
+
+	/**
+	 * @return The joined tuple is returned
+	 * @exception IOException
+	 *                I/O errors
+	 * @exception JoinsException
+	 *                some join exception
+	 * @exception IndexException
+	 *                exception from super class
+	 * @exception InvalidTupleSizeException
+	 *                invalid tuple size
+	 * @exception InvalidTypeException
+	 *                tuple type not valid
+	 * @exception PageNotReadException
+	 *                exception from lower layer
+	 * @exception TupleUtilsException
+	 *                exception from using tuple utilities
+	 * @exception PredEvalException
+	 *                exception from PredEval class
+	 * @exception SortException
+	 *                sort exception
+	 * @exception LowMemException
+	 *                memory error
+	 * @exception UnknowAttrType
+	 *                attribute type unknown
+	 * @exception UnknownKeyTypeException
+	 *                key type unknown
+	 * @exception Exception
+	 *                other exceptions
+	 * 
+	 */
+	public Tuple get_next() throws IOException, JoinsException, IndexException, InvalidTupleSizeException,
+			InvalidTypeException, PageNotReadException, TupleUtilsException, PredEvalException, SortException,
+			LowMemException, UnknowAttrType, UnknownKeyTypeException, Exception {
+		if (isComplete)
+			return null;
+
+		Tuple outerTuple = new Tuple();
+		Tuple innerTuple;
+		boolean useOuter = true;
+		do {
+			if (useOuter == true) {
+				// Get a tuple from the outer, delete an existing scan on the file, and reopen a
+				// new scan on the file.
+				// If a get_next on the outer returns DONE, then the nested loops join is done
+				// too.
+				useOuter = false;
+				if (inner != null) { // If this not the first time, then close
+					inner.closetuplescan();
+					inner = null;
+				}
+
+				try {
+					inner = columnarFile.openTupleScan();
+					
+				} catch (Exception e) {
+					throw new NestedLoopException(e, "openScan failed");
+				}
+
+				if ((outerTuple = outer.get_next()) == null) {
+					if (inner != null) {
+						inner.closetuplescan();
+						inner = null;
+					}
+					isComplete = true;
+					return null;
+				}
+			}
+
+			// The next step is to get a tuple from the inner
+			TID tid = new TID(innerTypes.length);
+			while ((innerTuple = inner.getNext(tid)) != null) {
+				innerTuple.setHdr((short) innerTypes.length, innerTypes, innerStrSizes);
+
+				if (PredEval.Eval(rightFilter, innerTuple, null, innerTypes, null) == true) {
+					if (PredEval.Eval(outputFilter, outerTuple, innerTuple, outerTypes, innerTypes) == true) {
+						// Apply a projection on the outer and inner tuples.
+						Projection.Join(outerTuple, outerTypes, 
+										innerTuple, innerTypes, 
+										joinTuple, projection, projection.length);
+						return joinTuple;
+					}
+				}
+			}
+
+			// There has been no match. Otherwise, we would have returned.
+			// Hence, inner is exhausted, => set get_from_outer = TRUE, go to top of loop
+
+			useOuter = true; // Loop back to top and get next outer tuple.
+		} while (true);
+	}
+
+	/**
+	 * implement the abstract method close() from super class Iterator to finish
+	 * cleaning up
+	 * 
+	 * @exception IOException
+	 *                I/O error from lower layers
+	 * @exception JoinsException
+	 *                join error from lower layers
+	 * @exception IndexException
+	 *                index access error
+	 */
+	public void close() throws JoinsException, IOException, IndexException {
+		if (!closeFlag) {
+
+			try {
+				if (outer != null)
+					outer.close();
+				if (inner != null)
+					inner.closetuplescan();
+			} catch (Exception e) {
+				throw new JoinsException(e, "NestedLoopsJoin.java: error in closing iterator.");
+			}
+			closeFlag = true;
+		}
+	}
+}
