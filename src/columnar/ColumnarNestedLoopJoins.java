@@ -118,7 +118,7 @@ public class ColumnarNestedLoopJoins extends Iterator {
 			return null;
 
 		Tuple outerTuple = new Tuple();
-		Tuple innerTuple;
+		Tuple innerTupleMasked;
 		boolean useOuter = true;
 		do {
 			if (useOuter == true) {
@@ -148,14 +148,24 @@ public class ColumnarNestedLoopJoins extends Iterator {
 					return null;
 				}
 			}
+			
+			// build column mask using output filter
+			FldSpec[] innerMask = Arrays.stream(outputFilter)
+								   .filter(f -> f != null)
+								   .map(f -> f.operand2.symbol)
+								   .toArray(FldSpec[]::new);
+			
 
 			// The next step is to get a tuple from the inner
 			TID tid = new TID(innerTypes.length);
-			while ((innerTuple = inner.getNext(tid)) != null) {
-				innerTuple.setHdr((short) innerTypes.length, innerTypes, innerStrSizes);
+			while ((innerTupleMasked = inner.getNext(tid, innerMask)) != null) {
+				innerTupleMasked.setHdr((short) innerTypes.length, innerTypes, innerStrSizes);
 
-				if (PredEval.Eval(rightFilter, innerTuple, null, innerTypes, null) == true) {
-					if (PredEval.Eval(outputFilter, outerTuple, innerTuple, outerTypes, innerTypes) == true) {
+				if (PredEval.Eval(rightFilter, innerTupleMasked, null, innerTypes, null) == true) {
+					if (PredEval.Eval(outputFilter, outerTuple, innerTupleMasked, outerTypes, innerTypes) == true) {
+						// get the rest of the tuple
+						Tuple innerTuple = columnarFile.getTuple(tid);
+						
 						// Apply a projection on the outer and inner tuples.
 						Projection.Join(outerTuple, outerTypes, 
 										innerTuple, innerTypes, 
