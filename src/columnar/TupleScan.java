@@ -3,6 +3,7 @@ package columnar;
 import java.io.*;
 import global.*;
 import heap.*;
+import iterator.FldSpec;
 
 
 /**
@@ -67,6 +68,25 @@ public class TupleScan implements GlobalConst{
 		TID tupleID = new TID(headerTuple.getTupleByteArray());
 		
 		Tuple ret_tuple = _cf.getTuple(tupleID);
+		
+		out_tid.copyTid(tupleID);		
+		return ret_tuple;
+	}
+	
+	public Tuple getNext(TID out_tid, FldSpec[] mask) throws 
+	InvalidSlotNumberException, HFException, HFDiskMgrException, HFBufMgrException, Exception
+	{
+		// get the next header entry
+		RID headerRID = new RID();
+		Tuple headerTuple = _headerScanner.getNext(headerRID);
+		
+		if(headerTuple == null)
+			return null;
+		
+		// convert entry to tuple
+		TID tupleID = new TID(headerTuple.getTupleByteArray());
+		
+		Tuple ret_tuple = _cf.getTuple(tupleID, mask);
 		
 		out_tid.copyTid(tupleID);		
 		return ret_tuple;

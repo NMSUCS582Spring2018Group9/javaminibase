@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import global.*;
 import heap.*;
+import iterator.FldSpec;
 
 
 interface  Filetype {
@@ -284,6 +285,57 @@ public class Columnarfile implements Filetype,  GlobalConst {
 				tuple.setFloFld(i+1, float_val);
 				break;
 			//TODO(aalbaltan) handle other cases
+			default:
+				break;
+			}
+		}
+		
+		return tuple;
+	}
+	
+	public Tuple getTuple(TID tid, FldSpec[] mask) throws 
+	InvalidSlotNumberException, 
+	InvalidTupleSizeException, 
+	HFException, 
+	HFDiskMgrException, 
+	HFBufMgrException,
+	Exception
+	{
+		boolean[] columnMask = new boolean[_numColumns];
+		
+		for (FldSpec p : mask)
+			columnMask[p.offset - 1] = true; 
+		
+		if(tid.getNumRIDs() != _numColumns)
+			throw new IllegalArgumentException("invalid tuple ID; number of columns mismatch");
+		
+		Tuple tuple = new Tuple();
+		tuple.setHdr((short)_numColumns, _type, _stringsSizes);
+		
+		// check whether the tuple exists
+		for(int i = 0; i < _numColumns; ++i) {
+			if (!columnMask[i])
+				continue;
+			
+			Tuple t = _columnsFiles[i].getRecord(tid.getRID(i));
+			
+			if(t == null)
+				return null;
+			
+			switch(_type[i].attrType)
+			{
+			case AttrType.attrInteger:
+				int int_val = Convert.getIntValue(0, t.getTupleByteArray());
+				tuple.setIntFld(i+1, int_val);
+				break;
+			case AttrType.attrString:
+				String str = new String(t.getTupleByteArray());
+				tuple.setStrFld(i+1, str);
+				break;
+			case AttrType.attrReal:
+				float float_val = Convert.getFloValue(0, t.getTupleByteArray());
+				tuple.setFloFld(i+1, float_val);
+				break;
 			default:
 				break;
 			}
