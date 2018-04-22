@@ -1,6 +1,7 @@
 package iterator;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 import bufmgr.*;
 import columnar.*;
@@ -113,17 +114,30 @@ public class ColumnarFileScan extends Iterator {
 			InvalidTypeException, PageNotReadException, TupleUtilsException, PredEvalException, SortException,
 			LowMemException, UnknowAttrType, UnknownKeyTypeException, Exception {
 
-		TID id = new TID(this.attributes.length);
+		TID tid = new TID(this.attributes.length);
 		while (true) {
-			in = scanner.getNext(id);
-			if (in == null)
+			// build mask for filter evaluation
+			FldSpec[] mask = null;
+			if (filters != null)
+				mask = Arrays.stream(filters).filter(f -> f != null).map(f -> f.operand1.symbol)
+						.toArray(FldSpec[]::new);
+			
+			
+			Tuple filterTuple;
+			if (mask != null && mask.length > 0)
+				filterTuple = scanner.getNext(tid, mask);
+			else 
+				filterTuple = scanner.getNext(tid);
+			if (filterTuple == null)
 				return null;
 
-			in.setHdr((short) attributes.length, attributes, string_sizes);
-			if (!PredEval.Eval(filters, in, null, attributes, null))
+			filterTuple.setHdr((short) attributes.length, attributes, string_sizes);
+			if (!PredEval.Eval(filters, filterTuple, null, attributes, null))
 				continue;
+			
+			Tuple projectionTuple = file.getTuple(tid);
 
-			Projection.Project(in, attributes, out, fields, fields.length);
+			Projection.Project(projectionTuple, attributes, out, fields, fields.length);
 			return out;
 
 		}
