@@ -14,6 +14,7 @@ public class ColumnarNestedLoopJoins extends Iterator {
 	private AttrType innerTypes[];
 	private short innerStrSizes[];
 	private CondExpr outputFilter[];
+	private FldSpec innerMask[];
 	private CondExpr rightFilter[];
 	private FldSpec projection[];
 
@@ -24,6 +25,10 @@ public class ColumnarNestedLoopJoins extends Iterator {
 
 	private boolean isComplete = false; // is the join complete
 	private Tuple joinTuple = new Tuple(); // joined tuple
+	
+	private Tuple outerTuple = new Tuple();
+	private Tuple innerTupleMasked;
+	private boolean useOuter = true;
 
 	/**
 	 * constructor Initialize the two relations which are joined, including relation
@@ -63,6 +68,8 @@ public class ColumnarNestedLoopJoins extends Iterator {
 		this.innerStrSizes = outerStrSizes;
 
 		this.outputFilter = outputFilter;
+		this.innerMask = Arrays.stream(outputFilter).filter(f -> f != null).map(f -> f.operand2.symbol)
+				.toArray(FldSpec[]::new);
 		this.rightFilter = rightFilter;
 
 		this.projection = projection;
@@ -117,9 +124,7 @@ public class ColumnarNestedLoopJoins extends Iterator {
 		if (isComplete)
 			return null;
 
-		Tuple outerTuple = new Tuple();
-		Tuple innerTupleMasked;
-		boolean useOuter = true;
+		
 		do {
 			if (useOuter == true) {
 				// Get a tuple from the outer, delete an existing scan on the file, and reopen a
@@ -148,13 +153,6 @@ public class ColumnarNestedLoopJoins extends Iterator {
 					return null;
 				}
 			}
-			
-			// build column mask using output filter
-			FldSpec[] innerMask = Arrays.stream(outputFilter)
-								   .filter(f -> f != null)
-								   .map(f -> f.operand2.symbol)
-								   .toArray(FldSpec[]::new);
-			
 
 			// The next step is to get a tuple from the inner
 			TID tid = new TID(innerTypes.length);

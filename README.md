@@ -36,4 +36,13 @@ Valid operators are: =, !=, >, >=, <, and <=
 
 **NOTE**: buffer size should be >= 8 for normal use
 
+## QSort (Running simple sort queries on existing database files)
+You can qsort a database with the following commands
+``` bash
+cd src
+make
+java tools.qsort [db name] [table name] [attribute] size]
+```
+
+**NOTE**: buffer size should be >= 8 for normal use
 

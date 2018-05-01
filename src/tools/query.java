@@ -4,6 +4,10 @@ import heap.*;
 import global.*;
 import iterator.*;
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
+import diskmgr.DB;
 
 /**
  * The query program performs query on existing row/column-oriented database relations and displays results based on specified conditions.
@@ -65,198 +69,85 @@ public class query {
 			System.exit(1);
 		}
 		
-		final int STRING_COLUMN_SIZE = 30;				// fixed-size string fields
-		String headerTableName = new String();
-		String headerString = new String();
-		String db_name = args[0];
+		String databaseName = args[0];
 		String tableName = args[1];
-		String rowTableName = tableName + "_row";
-		String columnTableName = tableName + "_column";
-		String column_name = args[2];
+		
+		String columnName = args[2];
 		String operator = args[3];
 		String value = args[4];
+		
 		int num_buffers = 0;
 		try {
 			num_buffers = Integer.parseInt(args[5]); 			// memory buffer pool size
 		} catch(NumberFormatException e) {
-			System.out.println("invalid NUMBUF input\n" + usage);
+			System.out.println("invalid NUMBUF input");
+			System.out.println(usage);
 			System.exit(1);
 		}
 		
-		int numStringColumns = 0;
 		
-		AttrType[] columnsTypes;
-		String[] columnsNames;
-		String pairs_delims = " ";
-		String types_delims = ":";
-		
-		SystemDefs sysdef = null;
-		// check whether the db already exists
-		File db_file = new File(db_name);
-		if(db_file.exists()) {	// file found
-			System.out.printf("An existing database (%s) was found, opening database with %d buffers.\n", db_name, num_buffers);
-			// open database with 100 buffers
-			sysdef = new SystemDefs(db_name,0,num_buffers,"Clock");
-		}else
-		{
-			System.out.println("Database not found, exiting.\n" + usage);
+		// check whether or not the database already exists
+		if (Files.notExists(Paths.get(databaseName))) {
+			System.out.println("Database '" + databaseName + "' not found, exiting.");
+			System.out.println(usage);
 			System.exit(1);
 		}
+
+		// open database
+		System.out.println("Database '" + databaseName + "' found, opening with " + num_buffers + " buffers.\n");
+		new SystemDefs(databaseName, 0, num_buffers, "Clock");
 		
 		try {
-			PageId rowPage = sysdef.JavabaseDB.get_file_entry(rowTableName);
-			PageId columnPage = sysdef.JavabaseDB.get_file_entry(columnTableName+".hdr");
+			Header hdr = new Header(tableName, false);	
 			
-			// check table type (row or column)
-			if(rowPage != null)
-			{				
-				headerTableName = rowTableName + "_type";
-			}
-			else if(columnPage != null)
-			{
-				headerTableName = columnTableName + "_type";
-			}
-			
-			// read table's header info
-			Heapfile headerFile = new Heapfile(headerTableName);
-			Tuple headerTuple = new Tuple();
-			short[] sSizes = new short[1];
-			sSizes[0] = 900;
-			AttrType[] types = new AttrType[1];
-			types[0] = new AttrType(AttrType.attrString);
-			RID rid = new RID();
-			Scan s = headerFile.openScan();
-			headerTuple = s.getNext(rid);
-			if(headerTuple == null) {
-				System.out.println("Attributes types table not found.\n");
-				System.exit(1);
-			}
-			headerTuple.setHdr((short)1, types, sSizes);
-			headerString = headerTuple.getStrFld(1);
-			
-			String[] pairs = headerString.split(pairs_delims);
-			columnsNames = new String[pairs.length];
-			columnsTypes = new AttrType[pairs.length];
-			for(int i = 0; i < pairs.length; ++i)
-			{
-				String[] name_type = pairs[i].split(types_delims);
-				columnsNames[i] = name_type[0].toLowerCase();
-				columnsTypes[i] = StringToAttrType(name_type[1]);
-			}
-			
-			// count number of string columns
-			for(int i = 0; i < columnsTypes.length; ++i)
-				if(columnsTypes[i].attrType == AttrType.attrString)
-					++numStringColumns;
-			
-			short[] stringsSizes = null;
-			if(numStringColumns > 0) {
-				stringsSizes = new short[numStringColumns];
-				for(int i = 0; i < stringsSizes.length; ++i)
-					stringsSizes[i] = STRING_COLUMN_SIZE;
-			}
 			
 			// preparing query condition
 			//NOTE: CondExpr array has to contain an extra (null) element otherwise PredEval.Eval would throw an exception 
-			int columnIndex = GetAttrType(columnsNames, column_name);
+			int columnIndex = hdr.indexOf(columnName);
 			CondExpr[] outFilter = new CondExpr[2];
 			outFilter[0] = new CondExpr();
 			outFilter[0].op    = StringToAttrOperator(operator);
 			outFilter[0].next  = null;
 			outFilter[0].type1 = new AttrType(AttrType.attrSymbol);
-			outFilter[0].type2 = columnsTypes[columnIndex];
-			outFilter[0].operand1.symbol = new FldSpec (new RelSpec(RelSpec.outer),columnIndex+1);
-			//outFilter[0].operand2.integer = 990;
-			if(columnsTypes[columnIndex].attrType == AttrType.attrInteger)
+			outFilter[0].type2 = hdr.types[columnIndex];
+			outFilter[0].operand1.symbol = hdr.select[columnIndex];
+		
+			if(hdr.types[columnIndex].attrType == AttrType.attrInteger)
 				outFilter[0].operand2.integer = Integer.parseInt(value);
-			else if(columnsTypes[columnIndex].attrType == AttrType.attrString)
+			else if(hdr.types[columnIndex].attrType == AttrType.attrString)
 				outFilter[0].operand2.string = value;
-			else if(columnsTypes[columnIndex].attrType == AttrType.attrReal)
+			else if(hdr.types[columnIndex].attrType == AttrType.attrReal)
 				outFilter[0].operand2.real = Float.parseFloat(value);
-			
-			// projection list
-			FldSpec [] Sprojection = new FldSpec[columnsTypes.length];
-			for(int i = 0; i < columnsTypes.length; ++i)
-			    Sprojection[i] = new FldSpec(new RelSpec(RelSpec.outer), i+1);
 			
 			// profiling
 			long start = System.nanoTime();
 			
-			// row query
-			if(rowPage != null)
-			{
-				FileScan fileScan = new FileScan(
-						rowTableName, 
-						columnsTypes,
-						stringsSizes,
-						(short) columnsTypes.length, 
-						(short) columnsTypes.length,
-						Sprojection, 
-						outFilter);
-				
-				// read and print all tuples in record set
-				Tuple t = fileScan.get_next();
-				if(t!= null) {
-					for(int i = 0; i < columnsTypes.length; ++i)
-						System.out.printf("%s ", columnsNames[i]);
-					System.out.println();
-				}
+			Iterator scanner = null;
+			try {
+				if (!hdr.columnar)
+					scanner = new FileScan(hdr.tableName, hdr.types, hdr.strSizes, (short) hdr.length,
+							(short) hdr.length, hdr.select, outFilter);
 				else
+					scanner = new ColumnarFileScan(hdr.tableName, hdr.types, hdr.strSizes, hdr.select, outFilter);
+			
+
+				Tuple t = scanner.get_next();
+				if (t == null) {
 					System.out.println("no records match specified condition");
+					return;
+				}
 				
+				// print table
+				System.out.println(String.join(" ", hdr.columns));
 				while( t != null)
 				{
-					for(int i = 0; i < columnsTypes.length; ++i)
-					{
-						if(columnsTypes[i].attrType == AttrType.attrInteger)
-							System.out.printf("%d ", t.getIntFld(i+1));
-						else if(columnsTypes[i].attrType == AttrType.attrString)
-							System.out.printf("%s ", t.getStrFld(i+1));
-						else if(columnsTypes[i].attrType == AttrType.attrReal)
-							System.out.printf("%.2f ", t.getFloFld(i+1));
-					}
-					System.out.println();
-			    	t = fileScan.get_next();
+					t.print(hdr.types);
+			    	t = scanner.get_next();
 				}
-				fileScan.close();
-				System.out.println();
-			}
-			// col query
-			else if(columnPage != null)
-			{
-				ColumnarFileScan columnarFileScan = new ColumnarFileScan(
-						columnTableName, 
-						columnsTypes, 
-						stringsSizes, 
-						Sprojection, 
-						outFilter);
-				
-				// read and print all tuples in record set
-				Tuple t = columnarFileScan.get_next();
-				if(t!= null) {
-					for(int i = 0; i < columnsTypes.length; ++i)
-						System.out.printf("%s ", columnsNames[i]);
-					System.out.println();
-				}
-				else
-					System.out.println("no records match specified condition");
-				
-				while( t != null)
-				{
-					for(int i = 0; i < columnsTypes.length; ++i)
-					{
-						if(columnsTypes[i].attrType == AttrType.attrInteger)
-							System.out.printf("%d ", t.getIntFld(i+1));
-						else if(columnsTypes[i].attrType == AttrType.attrString)
-							System.out.printf("%s ", t.getStrFld(i+1));
-						else if(columnsTypes[i].attrType == AttrType.attrReal)
-							System.out.printf("%.2f ", t.getFloFld(i+1));
-					}
-					System.out.println();
-			    	t = columnarFileScan.get_next();
-				}
-				columnarFileScan.close();
-				System.out.println();
+
+			} finally {
+				if (scanner != null)
+					scanner.close();
 			}
 			
 			long end = System.nanoTime();
@@ -270,14 +161,13 @@ public class query {
 		}
 		
 		try {
-			sysdef.JavabaseBM.flushAllPages();
-			sysdef.JavabaseDB.closeDB();
+			SystemDefs.JavabaseBM.flushAllPages();
+			SystemDefs.JavabaseDB.closeDB();
 		}catch(Exception e) {/*empty*/}
 		
 		// print page I/O info
-		System.out.printf("total page reads: %d\ttotal page writes: %d\n", 
-				sysdef.JavabaseDB.GetNumberOfPageReads(),
-				sysdef.JavabaseDB.GetNumberOfPageWrites());
+		System.out.println(String.format("total page reads: %d", DB.GetNumberOfPageReads()));
+		System.out.println(String.format("total page writes: %d\n", DB.GetNumberOfPageWrites()));
 	}
 
 }

@@ -1,6 +1,7 @@
 package columnar;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 import global.*;
 import heap.*;
@@ -27,7 +28,7 @@ public class Columnarfile implements Filetype,  GlobalConst {
 	// files created are required to have the same number of columns. 
 	
 	/* Number of columns/attributes of this relation */
-	static int _numColumns;
+	int _numColumns;
 	
 	/* Type of each column/attribute */
 	AttrType[] _type;
@@ -302,6 +303,8 @@ public class Columnarfile implements Filetype,  GlobalConst {
 	Exception
 	{
 		boolean[] columnMask = new boolean[_numColumns];
+		Arrays.fill(columnMask, false);
+		
 		
 		for (FldSpec p : mask)
 			columnMask[p.offset - 1] = true; 

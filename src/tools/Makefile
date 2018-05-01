@@ -7,7 +7,7 @@ JAVAC = $(JDKPATH)/bin/javac -g -classpath $(CLASSPATH)
 JAVA  = $(JDKPATH)/bin/java  -classpath $(CLASSPATH)
 
 # batch insert program
-all: BatchInsert Query QNLJ
+all: BatchInsert Query QNLJ Qsort
 
 BatchInsert: batchinsert.java
 	$(JAVAC) batchinsert.java
@@ -26,3 +26,9 @@ QNLJ: qNLJ.java
 
 qNLJ: QNLJ
 	$(JAVA) tools.qNLJ
+
+Qsort: qsort.java
+	$(JAVAC) qsort.java
+
+qsort: Qsort
+	$(JAVA) tools.qsort
