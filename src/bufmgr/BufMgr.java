@@ -734,10 +734,6 @@ public class BufMgr implements GlobalConst{
     replacer.unpin(frameNo);
     replacer.free(frameNo);
       }
-      catch(PagePinnedException e){
-    replacer.unpin(frameNo);
-    replacer.free(frameNo);
-      }
       catch(Exception e1){
 	throw new ReplacerException(e1, "BUFMGR, REPLACER_ERROR");
       }
